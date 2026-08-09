@@ -856,3 +856,4 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
       ],
     );
   }
+}
