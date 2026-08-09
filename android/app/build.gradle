@@ -1,0 +1,73 @@
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'dev.flutter.flutter-gradle-plugin'
+}
+
+android {
+    namespace 'com.example.sas_akount_login'
+    compileSdkVersion flutter.compileSdkVersion
+    ndkVersion flutter.ndkVersion
+
+    defaultConfig {
+        applicationId "com.example.sas_akount_login"
+        minSdkVersion flutter.minSdkVersion
+        targetSdkVersion flutter.targetSdkVersion
+        versionCode flutter.versionCode
+        versionName flutter.versionName
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildTypes {
+        debug {
+            // Suffixes and no shrinking for faster debug builds
+            applicationIdSuffix = '.debug'
+            versionNameSuffix  = '-DEBUG'
+            minifyEnabled    = false
+        }
+
+        release {
+            // Code shrinking & obfuscation
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                    'proguard-rules.pro'
+            signingConfig signingConfigs.debug
+        }
+
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        viewBinding true
+        compose     false
+    }
+
+    packagingOptions {
+        resources {
+            excludes += [
+                    '/META-INF/{AL2.0,LGPL2.1}'
+            ]
+        }
+    }
+
+    lint {
+        abortOnError true
+        disable      'MissingTranslation'
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+} 

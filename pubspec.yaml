@@ -1,0 +1,39 @@
+name: sas_akount_login
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.4.0
+  nepali_date_picker: ^7.0.1
+  nepali_utils: ^3.0.8
+  share_plus: ^12.0.0
+  intl: ^0.20.2
+  cupertino_icons: ^1.0.2
+  pdf: ^3.10.4
+  printing: ^5.11.1
+  sqflite: ^2.3.3+1
+  path_provider: ^2.1.4
+  path: any
+  provider: ^6.1.5
+  flutter_secure_storage: ^9.2.4
+  flutter_background_service: ^5.1.0
+  workmanager: ^0.9.0+3
+  sqflite_common_ffi: ^2.4.2
+  shimmer: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/logo.png
