@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart'; // Required for kIsWeb
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 👈 Required for SystemChrome
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:sas_akount_login/screens/home_screen.dart';
@@ -16,8 +17,16 @@ void main() {
   // Ensures Flutter services are ready before we check platforms or databases
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. First, check if we are NOT on the web.
-  // 2. If we are on a mobile/desktop device, check if it's Windows or Linux to init FFI.
+  // 🌟 1. Make system navigation/gesture bar transparent & edge-to-edge
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    systemNavigationBarColor: Colors.transparent, // Removes the solid black box
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.dark, // Adjust to light if your theme is dark
+  ));
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+  // 2. First, check if we are NOT on the web.
+  // 3. If we are on a mobile/desktop device, check if it's Windows or Linux to init FFI.
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;

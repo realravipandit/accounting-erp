@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../db/db_helper.dart';
 import 'register_screen.dart';
-import 'company_selection_screen.dart'; 
+import 'company_selection_screen.dart';
 import 'package:sas_akount_login/api_service.dart';
 
 final _storage = const FlutterSecureStorage();
@@ -17,16 +17,17 @@ class LoginScreen extends StatefulWidget {
 class LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  
   final FocusNode _usernameFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
-  
   final DBHelper _dbHelper = DBHelper();
   final ApiService _apiService = ApiService();
-  
+
   bool _obscurePassword = true;
-  bool _isLoading = false; 
+  bool _isLoading = false;
   bool _rememberMe = false;
+  
+  // State for Database Toggle (false = Billing, true = Akount)
+  bool _isAkountMaster = false; 
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -35,10 +36,9 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
   @override
   void initState() {
     super.initState();
-    
-    // 👉 ADDED: Call the function to auto-fill saved credentials on screen load
-    _loadSavedCredentials();
-    
+    // Load saved credentials and persistent database choice on screen load
+    _loadSavedData();
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -47,25 +47,21 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
-
     _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
 
     _usernameFocus.addListener(() => setState(() {}));
     _passwordFocus.addListener(() => setState(() {}));
-
     _animationController.forward();
   }
 
-  // 👉 ADDED: Function to fetch and inject the saved credentials
-  Future<void> _loadSavedCredentials() async {
+  // Fetch and inject saved credentials and persistent database preference
+  Future<void> _loadSavedData() async {
     final savedRememberMe = await _storage.read(key: 'remember_me');
-    
     if (savedRememberMe == 'true') {
       final savedUsername = await _storage.read(key: 'saved_username');
       final savedPassword = await _storage.read(key: 'saved_password');
-
       if (mounted) {
         setState(() {
           _rememberMe = true;
@@ -73,6 +69,14 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
           _passwordController.text = savedPassword ?? '';
         });
       }
+    }
+
+    // Load saved database toggle preference
+    final savedDbMode = await _storage.read(key: 'saved_central_db');
+    if (savedDbMode != null && mounted) {
+      setState(() {
+        _isAkountMaster = savedDbMode == 'true';
+      });
     }
   }
 
@@ -91,14 +95,15 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
       return;
     }
 
+    // Determine hidden database name based on toggle state
+    String hiddenTargetDatabase = _isAkountMaster ? 'SmAkountMaster' : 'SASBillingMaster';
+
     try {
-      // STRICT REAL-TIME BACKEND AUTHENTICATION
-      bool isAuthenticated = await _apiService.login(username, password);
+      bool isAuthenticated = await _apiService.login(username, password, hiddenTargetDatabase);
 
       if (!mounted) return;
 
       if (isAuthenticated) {
-        // 👉 ADDED: Complete Remember Me logic (Saves/Deletes Username AND Password)
         if (_rememberMe) {
           await _storage.write(key: 'saved_username', value: username);
           await _storage.write(key: 'saved_password', value: password);
@@ -124,23 +129,20 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Invalid username or password.'),
-            backgroundColor: Color(0xFFEF4444), 
+            backgroundColor: Color(0xFFEF4444),
           ),
         );
       }
     } catch (e) {
-      // CATCH AND DISPLAY NETWORK/SERVER ERRORS
       if (!mounted) return;
       setState(() => _isLoading = false);
-      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Connection failed: Unable to reach the server.'),
-          backgroundColor: Color(0xFFD97706), 
+          backgroundColor: Color(0xFFD97706),
           duration: Duration(seconds: 4),
         ),
       );
-      
       debugPrint('Backend Connection Error: $e');
     }
   }
@@ -157,10 +159,54 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
 
   @override
   Widget build(BuildContext context) {
+    final Color scaffoldBackground = _isAkountMaster 
+        ? Colors.blueGrey[50]! 
+        : const Color(0xFFF9FAFB); 
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: scaffoldBackground,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          Row(
+            children: [
+              Text(
+                'Billing',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: !_isAkountMaster ? FontWeight.bold : FontWeight.normal,
+                  color: !_isAkountMaster ? const Color(0xFF4F46E5) : Colors.grey, 
+                ),
+              ),
+              Switch(
+                value: _isAkountMaster,
+                activeColor: const Color(0xFF9333EA), 
+                inactiveThumbColor: const Color(0xFF4F46E5), 
+                inactiveTrackColor: const Color(0xFFEEF0FE),
+                onChanged: (bool value) async {
+                  setState(() {
+                    _isAkountMaster = value;
+                  });
+                  // Save toggle preference instantly to secure storage
+                  await _storage.write(key: 'saved_central_db', value: value.toString());
+                },
+              ),
+              Text(
+                'Akount',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: _isAkountMaster ? FontWeight.bold : FontWeight.normal,
+                  color: _isAkountMaster ? const Color(0xFF9333EA) : Colors.grey,
+                ),
+              ),
+              const SizedBox(width: 16),
+            ],
+          )
+        ],
+      ),
       body: Container(
-        color: const Color(0xFFF9FAFB),
+        color: scaffoldBackground,
         child: Stack(
           children: [
             SafeArea(
@@ -173,18 +219,18 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                       Container(
                         padding: const EdgeInsets.all(28.0),
                         decoration: BoxDecoration(
-                          color: Colors.white, 
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(28),
                           border: Border.all(color: const Color(0xFFEEF0FE), width: 1),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF4F46E5).withValues(alpha: 0.10), 
+                              color: const Color(0xFF4F46E5).withValues(alpha: 0.10),
                               blurRadius: 40,
                               spreadRadius: -6,
                               offset: const Offset(0, 20),
                             ),
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.03), 
+                              color: Colors.black.withValues(alpha: 0.03),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
                             ),
@@ -192,19 +238,18 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start, 
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             Center(
                               child: Hero(
                                 tag: 'app_logo_animation',
                                 child: Image.asset(
                                   'assets/images/logo.png',
-                                  height: 50, 
+                                  height: 50,
                                 ),
                               ),
                             ),
                             const SizedBox(height: 32),
-                            
                             SlideTransition(
                               position: _slideAnimation,
                               child: FadeTransition(
@@ -237,12 +282,11 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w400,
-                                          color: Color(0xFF6B7280), 
+                                          color: Color(0xFF6B7280),
                                         ),
                                       ),
                                     ),
                                     const SizedBox(height: 40),
-
                                     TweenAnimationBuilder<double>(
                                       tween: Tween<double>(begin: 1.0, end: _usernameFocus.hasFocus ? 1.02 : 1.0),
                                       duration: const Duration(milliseconds: 200),
@@ -266,28 +310,28 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                               focusNode: _usernameFocus,
                                               style: const TextStyle(color: Color(0xFF0F172A)),
                                               decoration: InputDecoration(
-                                                labelText: 'Username', 
-                                                hintText: _usernameFocus.hasFocus ? 'Enter your username' : '', 
+                                                labelText: 'Username',
+                                                hintText: _usernameFocus.hasFocus ? 'Enter your username' : '',
                                                 labelStyle: const TextStyle(color: Color(0xFF6B7280), fontSize: 15),
                                                 floatingLabelStyle: const TextStyle(
-                                                  color: Color(0xFF4F46E5), 
-                                                  fontSize: 15, 
+                                                  color: Color(0xFF4F46E5),
+                                                  fontSize: 15,
                                                   fontWeight: FontWeight.w600
                                                 ),
                                                 floatingLabelBehavior: FloatingLabelBehavior.auto,
                                                 prefixIcon: Icon(
-                                                  Icons.person_outline, 
+                                                  Icons.person_outline,
                                                   color: _usernameFocus.hasFocus ? const Color(0xFF4F46E5) : const Color(0xFF9CA3AF),
                                                 ),
                                                 filled: true,
-                                                fillColor: const Color(0xFFF8F9FC), 
+                                                fillColor: const Color(0xFFF8F9FC),
                                                 border: OutlineInputBorder(
                                                   borderRadius: BorderRadius.circular(14),
-                                                  borderSide: const BorderSide(color: Color(0xFFE9EAF2)), 
+                                                  borderSide: const BorderSide(color: Color(0xFFE9EAF2)),
                                                 ),
                                                 enabledBorder: OutlineInputBorder(
                                                   borderRadius: BorderRadius.circular(14),
-                                                  borderSide: const BorderSide(color: Color(0xFFE9EAF2)), 
+                                                  borderSide: const BorderSide(color: Color(0xFFE9EAF2)),
                                                 ),
                                                 focusedBorder: OutlineInputBorder(
                                                   borderRadius: BorderRadius.circular(14),
@@ -300,7 +344,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                       },
                                     ),
                                     const SizedBox(height: 24),
-
                                     TweenAnimationBuilder<double>(
                                       tween: Tween<double>(begin: 1.0, end: _passwordFocus.hasFocus ? 1.02 : 1.0),
                                       duration: const Duration(milliseconds: 200),
@@ -326,16 +369,16 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                               style: const TextStyle(color: Color(0xFF0F172A)),
                                               decoration: InputDecoration(
                                                 labelText: 'Password',
-                                                hintText: _passwordFocus.hasFocus ? '••••••••' : '',
+                                                hintText: _passwordFocus.hasFocus ? '--------' : '',
                                                 labelStyle: const TextStyle(color: Color(0xFF6B7280), fontSize: 15),
                                                 floatingLabelStyle: const TextStyle(
-                                                  color: Color(0xFF4F46E5), 
-                                                  fontSize: 15, 
+                                                  color: Color(0xFF4F46E5),
+                                                  fontSize: 15,
                                                   fontWeight: FontWeight.w600
                                                 ),
                                                 floatingLabelBehavior: FloatingLabelBehavior.auto,
                                                 prefixIcon: Icon(
-                                                  Icons.lock_outline, 
+                                                  Icons.lock_outline,
                                                   color: _passwordFocus.hasFocus ? const Color(0xFF4F46E5) : const Color(0xFF9CA3AF),
                                                 ),
                                                 filled: true,
@@ -370,7 +413,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                       },
                                     ),
                                     const SizedBox(height: 20),
-
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
@@ -416,7 +458,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                       ],
                                     ),
                                     const SizedBox(height: 32),
-
                                     SizedBox(
                                       width: double.infinity,
                                       height: 52,
@@ -442,7 +483,7 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                             backgroundColor: Colors.transparent,
                                             shadowColor: Colors.transparent,
                                             foregroundColor: Colors.white,
-                                            elevation: 0, 
+                                            elevation: 0,
                                             shape: RoundedRectangleBorder(
                                               borderRadius: BorderRadius.circular(14),
                                             ),
@@ -459,7 +500,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                       ),
                                     ),
                                     const SizedBox(height: 24),
-
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
@@ -494,7 +534,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                           ],
                         ),
                       ),
-                      
                       const SizedBox(height: 32),
                       const Text(
                         'By signing in, you agree to our Terms of Service\nand Privacy Policy.',
@@ -510,7 +549,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                 ),
               ),
             ),
-
             if (_isLoading)
               AnimatedOpacity(
                 opacity: _isLoading ? 1.0 : 0.0,

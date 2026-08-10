@@ -16,6 +16,24 @@ class ToastService {
 
     overlay.insert(overlayEntry);
   }
+
+  // 👉 Convenience Helpers for cleaner code across all screens and modules:
+  
+  static void showSuccess(BuildContext context, String message) {
+    show(context, message, isError: false);
+  }
+
+  static void showError(BuildContext context, String message) {
+    show(context, message, isError: true);
+  }
+
+  static void showWarning(BuildContext context, String message) {
+    show(context, message, isError: true);
+  }
+
+  static void showInfo(BuildContext context, String message) {
+    show(context, message, isError: false);
+  }
 }
 
 class _ToastWidget extends StatefulWidget {

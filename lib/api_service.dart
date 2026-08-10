@@ -12,10 +12,10 @@ class ApiService {
     final t = await _storage.read(key: 'jwt_token');
     final companyId = await _storage.read(key: 'selected_company_id');
     final companyCode = await _storage.read(key: 'selected_company_code');
-    
+
     return {
-      ..._headers, 
-      if (t != null) 'Authorization': 'Bearer $t', 
+      ..._headers,
+      if (t != null) 'Authorization': 'Bearer $t',
       if (companyId != null) 'company-id': companyId,
       if (companyCode != null) 'x-company-code': companyCode,
     };
@@ -29,15 +29,24 @@ class ApiService {
   }
 
   // --- Authentication & Companies ---
-  Future<bool> login(String u, String p) async {
+
+  // 👉 UPDATED: Now accepts centralDatabase and sends it to Node.js
+  Future<bool> login(String u, String p, String centralDatabase) async {
     final res = await http.post(
-      Uri.parse('${Config.baseUrl}/api/login'), 
-      body: jsonEncode({'username': u, 'password': p}), 
+      Uri.parse('${Config.baseUrl}/api/login'),
+      body: jsonEncode({
+        'username': u, 
+        'password': p,
+        'centralDatabase': centralDatabase // <-- Sent to backend
+      }),
       headers: _headers,
     );
+
     if (res.statusCode != 200) return false;
+    
     final token = jsonDecode(res.body)['accessToken'] ?? jsonDecode(res.body)['token'];
     if (token == null) return false;
+    
     await _storage.write(key: 'jwt_token', value: token);
     return true;
   }
@@ -46,43 +55,37 @@ class ApiService {
     final t = await _storage.read(key: 'jwt_token');
     if (t == null) throw Exception("Authentication error: No token found.");
     final res = await http.get(
-      Uri.parse('${Config.baseUrl}/api/companies'), 
+      Uri.parse('${Config.baseUrl}/api/companies'),
       headers: {..._headers, 'Authorization': 'Bearer $t'},
     );
     return res.statusCode == 200 ? jsonDecode(res.body) : throw Exception('Failed to load companies');
   }
 
-  // --- Dashboard & Reports (RESTORED) ---
   // --- Dashboard & Reports (RESTORED & BULLETPROOFED) ---
   Future<Map<String, dynamic>> fetchDashboardSummary({String? period, DateTime? startDate, DateTime? endDate}) async {
     try {
       String query = '';
-      
       // 1. Safely encode the period (fixes spaces like "Last 24 Hours")
       if (period != null && period.isNotEmpty) {
         query = '?period=${Uri.encodeComponent(period)}';
       }
-      
       // 2. Format dates cleanly for SQL (YYYY-MM-DD) instead of ISO string
       if (startDate != null && endDate != null) {
         final startStr = "${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}";
         final endStr = "${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}";
-        
         query += '${query.isEmpty ? '?' : '&'}startDate=$startStr&endDate=$endStr';
       }
 
       final url = '${Config.baseUrl}/api/dashboard$query';
       debugPrint('Fetching Dashboard from: $url');
-
       final res = await http.get(Uri.parse(url), headers: await _authHeaders());
-
+      
       // Let's print exactly what the server returns to catch any hidden SQL errors
       debugPrint('Dashboard Status: ${res.statusCode}');
       debugPrint('Dashboard Body: ${res.body}');
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
-
         // 3. Safely handle if the Node.js backend returned a List instead of a Map
         if (decoded is List) {
           if (decoded.isNotEmpty) {
@@ -91,13 +94,11 @@ class ApiService {
             return {}; // Server returned empty array
           }
         }
-        
         // If it's already a map, return it directly
         if (decoded is Map<String, dynamic>) {
           return decoded;
         }
       }
-      
       return {}; // Fallback for bad status code
     } catch (e) {
       debugPrint('CRITICAL Error fetching dashboard: $e');
@@ -154,10 +155,8 @@ class ApiService {
       final Map<String, dynamic> updatedData = Map.from(itemData);
       updatedData['valuationMethod'] = 'FIFO';
       updatedData['valuationFlag'] = 'F';
-
       if (updatedData.containsKey('altQty')) updatedData['ConversionRatio'] = updatedData['altQty'];
       if (updatedData.containsKey('qty')) updatedData['Factor'] = updatedData['qty'];
-
       final res = await http.post(
         Uri.parse('${Config.baseUrl}/api/items'),
         headers: await _authHeaders(),
@@ -217,9 +216,7 @@ class ApiService {
         headers: await _authHeaders(),
         body: jsonEncode(payload),
       );
-
       final responseData = jsonDecode(response.body);
-
       if (response.statusCode == 200 && responseData['success'] == true) {
         return {
           'success': true,
@@ -269,6 +266,7 @@ class ApiService {
       return [];
     }
   }
+
   // ===========================================================================
   // PURCHASE ENTRY API METHODS
   // ===========================================================================
@@ -314,27 +312,21 @@ class ApiService {
   }
 
   /// Fetch Purchase Term Masters (tblPITermMaster)
-  /// Fetch Purchase Term Masters (tblPITermMaster)
   Future<List<dynamic>> fetchPurchaseTermMasters() async {
     try {
       debugPrint('🌍 HITTING API: ${Config.baseUrl}/api/purchase/term-masters');
-      
       final res = await http.get(
         Uri.parse('${Config.baseUrl}/api/purchase/term-masters'),
         headers: await _authHeaders(),
       );
-      
       // 🚨 AGGRESSIVE NETWORK LOGS 🚨
       debugPrint('✅ API RESPONSE CODE: ${res.statusCode}');
       debugPrint('📦 API RESPONSE BODY: ${res.body}');
-      
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
-        
         // Handle case where it might be wrapped in an object like { data: [...] }
         if (decoded is List) return decoded;
         if (decoded is Map && decoded['data'] != null) return decoded['data'];
-        
         return [];
       } else {
         debugPrint('❌ API FAILED WITH CODE: ${res.statusCode}');
@@ -354,14 +346,12 @@ class ApiService {
         headers: await _authHeaders(),
         body: jsonEncode(payload),
       );
-      
       final data = jsonDecode(res.body);
-      
       if (res.statusCode == 200) {
         return data; // Returns the { success: true, voucherId: ... } object
       } else {
         return {
-          'success': false, 
+          'success': false,
           'message': data['error'] ?? data['message'] ?? 'Failed to submit purchase.'
         };
       }
