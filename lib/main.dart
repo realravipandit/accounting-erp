@@ -1,23 +1,22 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/foundation.dart'; // Required for kIsWeb
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // 👈 Required for SystemChrome
+import 'package:flutter/services.dart'; // ðŸ‘ˆ Required for SystemChrome
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
-import 'package:sas_akount_login/screens/home_screen.dart';
-import 'package:sas_akount_login/screens/login_screen.dart';
-import 'package:sas_akount_login/screens/register_screen.dart';
-import 'package:sas_akount_login/screens/sale_screen.dart';
-import 'package:sas_akount_login/screens/purchase_screen.dart';
-import 'package:sas_akount_login/screens/search_screen.dart';
-import 'package:sas_akount_login/screens/splash_screen.dart';
+import 'package:sas_akount_login/features/dashboard/home_screen.dart';
+import 'package:sas_akount_login/features/auth/login_screen.dart';
+import 'package:sas_akount_login/features/auth/register_screen.dart';
+import 'package:sas_akount_login/features/sales/sale_screen.dart';
+import 'package:sas_akount_login/features/purchase/purchase_screen.dart';
+import 'package:sas_akount_login/features/search/search_screen.dart';
+import 'package:sas_akount_login/features/auth/splash_screen.dart';
 
 void main() {
   // Ensures Flutter services are ready before we check platforms or databases
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🌟 1. Make system navigation/gesture bar transparent & edge-to-edge
+  // ðŸŒŸ 1. Make system navigation/gesture bar transparent & edge-to-edge
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     systemNavigationBarColor: Colors.transparent, // Removes the solid black box
     systemNavigationBarDividerColor: Colors.transparent,
@@ -42,6 +41,15 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SAS Akount',
+      // ðŸŒŸ This builder ensures Flutter's engine can never overwrite your transparent navigation bar
+      builder: (context, child) {
+        SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarDividerColor: Colors.transparent,
+          systemNavigationBarIconBrightness: Brightness.dark, // Use Brightness.light if your app background is dark
+        ));
+        return child!;
+      },
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -51,7 +59,7 @@ class MyApp extends StatelessWidget {
         '/splash': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
-        '/home': (context) => const HomePage(),
+        '/home': (context) => HomePage(),
         '/sales': (context) => const SaleScreen(),
         '/purchases': (context) => const PurchaseScreen(),
         '/search': (context) => const SearchScreen(),
