@@ -250,4 +250,35 @@ class SalesService {
 
     return {};
   }
+
+  // ============================================================
+  // SALES ORDER METHODS
+  // ============================================================
+
+  Future<String> getNextSalesOrderNumber() async {
+    final response = await _api.get('sales-order/next-voucher'); // Point to your SO API endpoint
+    if (response.statusCode != 200) {
+      throw Exception('Failed to get next sales order number');
+    }
+    final data = jsonDecode(response.body);
+    if (data is Map) {
+      return data['voucherId']?.toString() ??
+          data['orderNumber']?.toString() ??
+          data['voucherNo']?.toString() ??
+          '';
+    }
+    return data?.toString() ?? '';
+  }
+
+  Future<Map<String, dynamic>> submitSalesOrder(Map<String, dynamic> payload) async {
+    final response = await _api.post(
+      'sales-order/create', // Point to your SO API endpoint
+      body: payload,
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to save sales order. HTTP Status: ${response.statusCode}');
+    }
+  }
 }

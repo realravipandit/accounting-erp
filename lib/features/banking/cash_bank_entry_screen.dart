@@ -5,41 +5,53 @@ import 'package:intl/intl.dart';
 import 'package:nepali_date_picker/nepali_date_picker.dart';
 import 'package:sas_akount_login/core/services/toast_service.dart';
 
-// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ────────────────────────────────────────────────────────────
 // DESIGN TOKENS
-// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// A single neutral-ledger palette shared with Sales/Purchase/
+// Outstanding screens, plus the same dual-accent system used
+// there: emerald = inflow (Receipt), slate = outflow (Payment).
+// The whole voucher — header, rows, dialogs, buttons — is
+// tinted by whichever side the active document belongs to.
+// ────────────────────────────────────────────────────────────
 class _Tokens {
-  static const Color primary = Color(0xFF3B5BFB);
-  static const Color primaryDark = Color(0xFF2A44D6);
-  static const Color primarySoft = Color(0xFFEEF1FF);
+  static const Color textPrimary = Color(0xFF12142A);
+  static const Color textSecondary = Color(0xFF6B7086);
+  static const Color textMuted = Color(0xFF9CA0B4);
+
   static const Color surface = Color(0xFFFFFFFF);
   static const Color canvas = Color(0xFFF6F7FB);
   static const Color border = Color(0xFFE7E9F1);
   static const Color borderStrong = Color(0xFFD8DBE6);
-  static const Color textPrimary = Color(0xFF13152B);
-  static const Color textSecondary = Color(0xFF6B7086);
-  static const Color textMuted = Color(0xFF9CA0B4);
-  static const Color success = Color(0xFF16A34A);
-  static const Color successSoft = Color(0xFFECFDF3);
-  static const Color warning = Color(0xFFD97706);
-  static const Color warningSoft = Color(0xFFFFF7ED);
+
+  // Receipt / inflow
+  static const Color emerald = Color(0xFF0D9F6E);
+  static const Color emeraldSoft = Color(0xFFE6F8F1);
+  static const Color emeraldDark = Color(0xFF0B7F58);
+
+  // Payment / outflow
+  static const Color slate = Color(0xFF3B5BFB);
+  static const Color slateSoft = Color(0xFFEEF1FF);
+  static const Color slateDark = Color(0xFF2A44D6);
+
   static const Color danger = Color(0xFFDC2626);
   static const Color dangerSoft = Color(0xFFFEF2F2);
 
   static const double rSm = 10;
   static const double rMd = 14;
-  static const double rLg = 20;
+  static const double rLg = 18;
   static const double rXl = 26;
+
+  static const String mono = 'monospace';
 
   static List<BoxShadow> shadowSm = [
     BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
   ];
   static List<BoxShadow> shadowMd = [
-    BoxShadow(color: const Color(0xFF13152B).withValues(alpha: 0.06), blurRadius: 24, offset: const Offset(0, 8)),
+    BoxShadow(color: const Color(0xFF12142A).withValues(alpha: 0.06), blurRadius: 24, offset: const Offset(0, 8)),
   ];
-  static List<BoxShadow> shadowGlow = [
-    BoxShadow(color: primary.withValues(alpha: 0.28), blurRadius: 20, offset: const Offset(0, 8)),
-  ];
+  static List<BoxShadow> glow(Color c) => [
+        BoxShadow(color: c.withValues(alpha: 0.26), blurRadius: 18, offset: const Offset(0, 8)),
+      ];
 }
 
 class CashBankEntryScreen extends StatefulWidget {
@@ -119,6 +131,8 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
     }
   }
 
+  // ── Type / accent derivation (business logic unchanged) ──
+
   String get _derivedCashBankType {
     if (_selectedSequence == null) return 'P';
     final docType = (_selectedSequence!['documentType'] ??
@@ -132,6 +146,21 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
     }
     return 'P';
   }
+
+  String _typeForSequence(Map<String, dynamic> seq) {
+    final docType = (seq['documentType'] ?? seq['DocumentType'] ?? seq['DocumentName'] ?? '')
+        .toString()
+        .toUpperCase();
+    if (docType.startsWith('R') || docType.contains('RECEIPT')) return 'R';
+    return 'P';
+  }
+
+  bool get _isReceipt => _derivedCashBankType == 'R';
+  Color get _accent => _isReceipt ? _Tokens.emerald : _Tokens.slate;
+  Color get _accentSoft => _isReceipt ? _Tokens.emeraldSoft : _Tokens.slateSoft;
+  Color get _accentDark => _isReceipt ? _Tokens.emeraldDark : _Tokens.slateDark;
+  IconData get _accentIcon => _isReceipt ? Icons.call_received_rounded : Icons.call_made_rounded;
+  String get _typeLabel => _isReceipt ? 'Receipt' : 'Payment';
 
   Future<void> _handleSequenceChange(Map<String, dynamic> seq) async {
     setState(() {
@@ -207,7 +236,7 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Select Document Type',
+                      const Text('Select Voucher Type',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _Tokens.textPrimary)),
                       _BouncingTap(
                         onTap: () => Navigator.pop(ctx),
@@ -220,19 +249,25 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                   ),
                 ),
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 360),
+                  constraints: const BoxConstraints(maxHeight: 380),
                   child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                     shrinkWrap: true,
                     itemCount: _availableSequences.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 4),
                     itemBuilder: (_, i) {
                       final seq = _availableSequences[i];
                       final isSelected = _selectedSequence?['DocumentID'] == seq['DocumentID'];
+                      final type = _typeForSequence(seq);
+                      final tileAccent = type == 'R' ? _Tokens.emerald : _Tokens.slate;
+                      final tileAccentSoft = type == 'R' ? _Tokens.emeraldSoft : _Tokens.slateSoft;
+                      final tileIcon = type == 'R' ? Icons.call_received_rounded : Icons.call_made_rounded;
                       return _SelectableTile(
                         title: seq['DocumentName'] ?? 'Voucher',
                         subtitle: 'Prefix: ${seq['Prefix'] ?? '---'}',
-                        icon: Icons.description_rounded,
+                        icon: tileIcon,
+                        accent: tileAccent,
+                        accentSoft: tileAccentSoft,
                         selected: isSelected,
                         onTap: () {
                           _handleSequenceChange(seq);
@@ -259,7 +294,7 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
       lastDate: NepaliDateTime(2100, 12, 30),
       builder: (context, child) => _SmoothPopupContainer(
         child: Theme(
-          data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: _Tokens.primary)),
+          data: Theme.of(context).copyWith(colorScheme: ColorScheme.light(primary: _accent)),
           child: child!,
         ),
       ),
@@ -310,6 +345,8 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
     return sum;
   }
 
+  double get _voucherTotal => _isReceipt ? _totalCredit : _totalDebit;
+
   Future<void> _showCashBankLedgerSelection() async {
     final cashBankLedgers = await _apiService.getCashBankLedgers();
     final TextEditingController searchCtrl = TextEditingController();
@@ -331,6 +368,7 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
             return _SmoothPopupContainer(
               child: _SheetShell(
                 title: 'Select Cash / Bank Account',
+                accent: _accent,
                 searchController: searchCtrl,
                 searchHint: 'Search Cash or Bank ledger...',
                 onSearchChanged: () => setModal(() {}),
@@ -353,15 +391,15 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                           final pan = (l['PanNo'] ?? l['panNo'] ?? '').toString();
                           return _LedgerTile(
                             icon: Icons.account_balance_rounded,
-                            iconColor: _Tokens.primary,
-                            iconBg: _Tokens.primarySoft,
+                            iconColor: _accent,
+                            iconBg: _accentSoft,
                             name: name.isNotEmpty ? name : 'Unnamed Account',
                             code: code,
                             pan: pan,
                             extraLine: [
                               if (address.isNotEmpty) address,
                               if (phone.isNotEmpty) 'Ph: $phone',
-                            ].join('  -  '),
+                            ].join('  ·  '),
                             onTap: () {
                               setState(() => _selectedCashBankLedger = l);
                               Navigator.pop(ctx);
@@ -407,6 +445,7 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
             return _SmoothPopupContainer(
               child: _SheetShell(
                 title: 'Select Account Ledger',
+                accent: _accent,
                 searchController: searchCtrl,
                 searchHint: 'Search ledger name or code...',
                 onSearchChanged: () => setModal(() {}),
@@ -428,8 +467,8 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                           final pan = (l['PanNo'] ?? l['panNo'] ?? '').toString();
                           return _LedgerTile(
                             icon: Icons.receipt_long_rounded,
-                            iconColor: _Tokens.success,
-                            iconBg: _Tokens.successSoft,
+                            iconColor: _Tokens.textSecondary,
+                            iconBg: _Tokens.canvas,
                             name: name,
                             code: code,
                             pan: pan,
@@ -504,8 +543,11 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
 
   void _showSuccessPopup(String voucherNo, [dynamic netAmount]) {
     final double displayAmount = netAmount != null
-        ? double.tryParse(netAmount.toString()) ?? (_derivedCashBankType == 'R' ? _totalCredit : _totalDebit)
-        : (_derivedCashBankType == 'R' ? _totalCredit : _totalDebit);
+        ? double.tryParse(netAmount.toString()) ?? _voucherTotal
+        : _voucherTotal;
+    final accent = _accent;
+    final accentSoft = _accentSoft;
+    final label = _typeLabel;
 
     showModalBottomSheet(
       context: context,
@@ -526,16 +568,16 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  color: _Tokens.successSoft,
+                  color: accentSoft,
                   shape: BoxShape.circle,
-                  border: Border.all(color: _Tokens.success.withValues(alpha: 0.15), width: 6),
+                  border: Border.all(color: accent.withValues(alpha: 0.18), width: 6),
                 ),
-                child: const Icon(Icons.check_rounded, color: _Tokens.success, size: 32),
+                child: Icon(Icons.check_rounded, color: accent, size: 32),
               ),
               const SizedBox(height: 18),
-              const Text(
-                'Voucher Saved Successfully',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _Tokens.textPrimary),
+              Text(
+                '$label Saved Successfully',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _Tokens.textPrimary),
               ),
               const SizedBox(height: 4),
               Text(
@@ -554,7 +596,8 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                   children: [
                     _buildPopupDetailRow('Account', (_selectedCashBankLedger?['LedgerName'] ?? '').toString()),
                     const SizedBox(height: 10),
-                    _buildPopupDetailRow('Total Amount', 'Rs. ${displayAmount.toStringAsFixed(2)}', emphasize: true),
+                    _buildPopupDetailRow('Total Amount', 'Rs. ${displayAmount.toStringAsFixed(2)}',
+                        emphasize: true, accent: accent),
                     const SizedBox(height: 10),
                     _buildPopupDetailRow('Date', _dateController.text),
                   ],
@@ -576,6 +619,7 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                   Expanded(
                     child: _PrimaryButton(
                       label: 'New Entry',
+                      colors: [accent, _isReceipt ? _Tokens.emeraldDark : _Tokens.slateDark],
                       onTap: () {
                         Navigator.pop(ctx);
                         setState(() {
@@ -597,7 +641,7 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
     );
   }
 
-  Widget _buildPopupDetailRow(String label, String value, {bool emphasize = false}) {
+  Widget _buildPopupDetailRow(String label, String value, {bool emphasize = false, Color? accent}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -607,7 +651,8 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
           style: TextStyle(
             fontSize: emphasize ? 15 : 13,
             fontWeight: FontWeight.w700,
-            color: emphasize ? _Tokens.primary : _Tokens.textPrimary,
+            fontFamily: emphasize ? _Tokens.mono : null,
+            color: emphasize ? (accent ?? _Tokens.textPrimary) : _Tokens.textPrimary,
           ),
         ),
       ],
@@ -652,9 +697,27 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
             ),
           ),
         ),
-        title: const Text(
-          "Cash/Bank Entry",
-          style: TextStyle(color: _Tokens.textPrimary, fontWeight: FontWeight.w700, fontSize: 17),
+        title: Row(
+          children: [
+            const Text(
+              "Cash / Bank Entry",
+              style: TextStyle(color: _Tokens.textPrimary, fontWeight: FontWeight.w700, fontSize: 17),
+            ),
+            if (!_isLoadingSequences) ...[
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _accentSoft,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _typeLabel,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _accent, letterSpacing: 0.2),
+                ),
+              ),
+            ],
+          ],
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -672,34 +735,14 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildDocTypeCard(docTitle),
-                        const SizedBox(height: 14),
-                        Row(children: [
-                          Expanded(
-                            child: _buildTextField(
-                              label: 'Voucher No',
-                              controller: _voucherNoController,
-                              enabled: false,
-                              icon: Icons.confirmation_number_outlined,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildTextField(
-                              label: 'Date (BS)',
-                              controller: _dateController,
-                              suffixIcon: Icons.calendar_today_rounded,
-                              onTap: () => _selectSystemDate(context),
-                            ),
-                          ),
-                        ]),
+                        _buildVoucherMetaCard(docTitle),
                         const SizedBox(height: 14),
                         _buildCashBankSelector(cashBankName),
                         const SizedBox(height: 24),
                         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          Text('Voucher Entries (${_gridRows.length})',
+                          Text('Entries (${_gridRows.length})',
                               style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: _Tokens.textPrimary)),
-                          _GhostAddButton(onTap: _addNewRow),
+                          _GhostAddButton(onTap: _addNewRow, color: _accent, bg: _accentSoft),
                         ]),
                         const SizedBox(height: 12),
                         if (_gridRows.isEmpty)
@@ -728,42 +771,99 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
     );
   }
 
-  Widget _buildDocTypeCard(String docTitle) {
+  // ── Header: voucher type + voucher no + date, one cohesive card ──
+  Widget _buildVoucherMetaCard(String docTitle) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: _Tokens.surface,
-        borderRadius: BorderRadius.circular(_Tokens.rMd),
+        borderRadius: BorderRadius.circular(_Tokens.rLg),
         border: Border.all(color: _Tokens.border),
         boxShadow: _Tokens.shadowSm,
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _Tokens.primarySoft,
-              borderRadius: BorderRadius.circular(_Tokens.rSm),
-            ),
-            child: const Icon(Icons.description_rounded, color: _Tokens.primary, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            child: Row(
               children: [
-                const Text('DOCUMENT TYPE',
-                    style: TextStyle(fontSize: 10.5, color: _Tokens.textMuted, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
-                const SizedBox(height: 2),
-                Text(docTitle, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: _Tokens.textPrimary)),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(color: _accentSoft, borderRadius: BorderRadius.circular(_Tokens.rSm)),
+                  child: Icon(_accentIcon, color: _accent, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('VOUCHER TYPE',
+                          style: TextStyle(fontSize: 10.5, color: _Tokens.textMuted, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                      const SizedBox(height: 2),
+                      Text(docTitle, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: _Tokens.textPrimary)),
+                    ],
+                  ),
+                ),
+                if (_availableSequences.length > 1)
+                  _ChipButton(label: 'Change', onTap: _showSequenceSelectorDialog, color: _accent, bg: _accentSoft),
               ],
             ),
           ),
-          if (_availableSequences.length > 1)
-            _ChipButton(label: 'Change', onTap: _showSequenceSelectorDialog),
+          Divider(height: 1, color: _Tokens.border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 15),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _metaField(
+                    label: 'VOUCHER NO',
+                    value: _voucherNoController.text,
+                    mono: true,
+                  ),
+                ),
+                Container(width: 1, height: 34, color: _Tokens.border, margin: const EdgeInsets.symmetric(horizontal: 16)),
+                Expanded(
+                  child: _BouncingTap(
+                    onTap: () => _selectSystemDate(context),
+                    child: _metaField(
+                      label: 'DATE (BS)',
+                      value: _dateController.text,
+                      trailingIcon: Icons.calendar_today_rounded,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _metaField({required String label, required String value, bool mono = false, IconData? trailingIcon}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 10, color: _Tokens.textMuted, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+        const SizedBox(height: 5),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                value,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: _Tokens.textPrimary,
+                  fontFamily: mono ? _Tokens.mono : null,
+                ),
+              ),
+            ),
+            if (trailingIcon != null) Icon(trailingIcon, size: 15, color: _Tokens.textMuted),
+          ],
+        ),
+      ],
     );
   }
 
@@ -775,35 +875,31 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: _Tokens.surface,
-          gradient: LinearGradient(
-            colors: [_Tokens.primary.withValues(alpha: 0.06), _Tokens.primary.withValues(alpha: 0.02)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(_Tokens.rMd),
-          border: Border.all(color: isEmpty ? _Tokens.primary.withValues(alpha: 0.3) : _Tokens.border),
+          borderRadius: BorderRadius.circular(_Tokens.rLg),
+          border: Border.all(color: isEmpty ? _accent.withValues(alpha: 0.4) : _Tokens.border, width: isEmpty ? 1.4 : 1),
+          boxShadow: _Tokens.shadowSm,
         ),
         child: Row(children: [
           Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: _Tokens.surface, borderRadius: BorderRadius.circular(_Tokens.rSm), boxShadow: _Tokens.shadowSm),
-            child: const Icon(Icons.account_balance_wallet_rounded, color: _Tokens.primary, size: 20),
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(color: _accentSoft, borderRadius: BorderRadius.circular(_Tokens.rSm)),
+            child: Icon(Icons.account_balance_wallet_rounded, color: _accent, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('CASH / BANK LEDGER',
-                    style: TextStyle(fontSize: 10.5, color: _Tokens.textMuted, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
-                const SizedBox(height: 2),
+                const Text('CASH / BANK ACCOUNT',
+                    style: TextStyle(fontSize: 10.5, color: _Tokens.textMuted, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                const SizedBox(height: 3),
                 Text(
                   cashBankName,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: isEmpty ? _Tokens.primary : _Tokens.textPrimary,
+                    color: isEmpty ? _accent : _Tokens.textPrimary,
                   ),
                 ),
               ],
@@ -858,9 +954,11 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _totalsRow('Debit', _totalDebit, _Tokens.success),
-                          const SizedBox(height: 4),
-                          _totalsRow('Credit', _totalCredit, _Tokens.warning),
+                          Text(_typeLabel.toUpperCase(),
+                              style: TextStyle(fontSize: 10.5, color: _Tokens.textMuted, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                          const SizedBox(height: 3),
+                          Text('Rs. ${_voucherTotal.toStringAsFixed(2)}',
+                              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: _accent, fontFamily: _Tokens.mono)),
                         ],
                       ),
                     ),
@@ -871,6 +969,7 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                       child: _PrimaryButton(
                         label: 'Save Voucher',
                         loading: _isSaving,
+                        colors: [_accent, _accentDark],
                         onTap: _isSaving ? null : _submitVoucher,
                       ),
                     ),
@@ -884,28 +983,17 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
     );
   }
 
-  Widget _totalsRow(String label, double value, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 6),
-        Text('$label ', style: const TextStyle(fontSize: 12.5, color: _Tokens.textSecondary, fontWeight: FontWeight.w500)),
-        Text('Rs. ${value.toStringAsFixed(2)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-      ],
-    );
-  }
-
   Widget _buildRowItem(int i) {
     final row = _gridRows[i];
     final ledgerObj = row['ledger'];
-    final ledgerName = ledgerObj == null ? 'Select Ledger...' : (ledgerObj['LedgerName'] ?? ledgerObj['ledgerName'] ?? '').toString();
+    final ledgerName = ledgerObj == null ? 'Select ledger...' : (ledgerObj['LedgerName'] ?? ledgerObj['ledgerName'] ?? '').toString();
     final String rowType = row['type'] ?? _derivedCashBankType;
-    final isReceipt = rowType == 'R';
+    final isReceiptRow = rowType == 'R';
+    final rowAccent = isReceiptRow ? _Tokens.emerald : _Tokens.slate;
+    final rowAccentSoft = isReceiptRow ? _Tokens.emeraldSoft : _Tokens.slateSoft;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: _Tokens.surface,
         borderRadius: BorderRadius.circular(_Tokens.rMd),
@@ -915,34 +1003,22 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                decoration: BoxDecoration(
-                  color: isReceipt ? _Tokens.warningSoft : _Tokens.successSoft,
-                  borderRadius: BorderRadius.circular(_Tokens.rSm),
-                ),
-                child: Text(
-                  isReceipt ? 'Rec' : 'Pay',
-                  style: TextStyle(
-                    color: isReceipt ? _Tokens.warning : _Tokens.success,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 11,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(color: rowAccentSoft, borderRadius: BorderRadius.circular(6)),
+                  child: Text(
+                    isReceiptRow ? 'CR' : 'DR',
+                    style: TextStyle(color: rowAccent, fontWeight: FontWeight.w800, fontSize: 10.5, letterSpacing: 0.4),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _BouncingTap(
-                  onTap: () => _showRowLedgerSelection(i),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: _Tokens.canvas,
-                      borderRadius: BorderRadius.circular(_Tokens.rSm),
-                      border: Border.all(color: _Tokens.border),
-                    ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _BouncingTap(
+                    onTap: () => _showRowLedgerSelection(i),
                     child: Row(
                       children: [
                         Expanded(
@@ -951,117 +1027,66 @@ class _CashBankEntryScreenState extends State<CashBankEntryScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: ledgerObj == null ? _Tokens.textMuted : _Tokens.textPrimary,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                               fontSize: 14,
                             ),
                           ),
                         ),
-                        const Icon(Icons.unfold_more_rounded, size: 16, color: _Tokens.textMuted),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.unfold_more_rounded, size: 15, color: _Tokens.textMuted),
                       ],
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              _BouncingTap(
-                onTap: () => _showRowLedgerSelection(i),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  color: Colors.transparent,
-                  child: const Icon(Icons.edit_outlined, color: _Tokens.primary, size: 20),
+                _BouncingTap(
+                  onTap: () => _removeRow(i),
+                  child: const Padding(
+                    padding: EdgeInsets.only(left: 6),
+                    child: Icon(Icons.close_rounded, size: 18, color: _Tokens.textMuted),
+                  ),
                 ),
-              ),
-              _BouncingTap(
-                onTap: () => _removeRow(i),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  color: Colors.transparent,
-                  child: const Icon(Icons.delete_outline_rounded, color: _Tokens.danger, size: 20),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: _RowInput(
-                  controller: row['amountController'],
-                  label: 'Amount (Rs)',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
-                  onChanged: (val) {
-                    row['amount'] = double.tryParse(val) ?? 0.0;
-                    setState(() {});
-                  },
+          Divider(height: 1, color: _Tokens.border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: _RowInput(
+                    controller: row['amountController'],
+                    label: 'Amount (Rs)',
+                    mono: true,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
+                    onChanged: (val) {
+                      row['amount'] = double.tryParse(val) ?? 0.0;
+                      setState(() {});
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 4,
-                child: _RowInput(
-                  controller: row['narrationController'],
-                  label: 'Narration',
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 4,
+                  child: _RowInput(
+                    controller: row['narrationController'],
+                    label: 'Narration',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildTextField({
-    required String label,
-    required TextEditingController controller,
-    IconData? suffixIcon,
-    IconData? icon,
-    VoidCallback? onTap,
-    bool enabled = true,
-  }) {
-    Widget fieldContainer = Container(
-      decoration: BoxDecoration(
-        color: enabled ? _Tokens.surface : _Tokens.canvas,
-        borderRadius: BorderRadius.circular(_Tokens.rSm),
-        border: Border.all(color: _Tokens.border),
-      ),
-      child: TextFormField(
-        controller: controller,
-        readOnly: onTap != null,
-        enabled: enabled,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _Tokens.textPrimary),
-        decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          prefixIcon: icon != null ? Icon(icon, size: 18, color: _Tokens.textMuted) : null,
-          suffixIcon: suffixIcon != null ? Icon(suffixIcon, size: 18, color: _Tokens.textMuted) : null,
-          border: InputBorder.none,
-          disabledBorder: InputBorder.none,
-        ),
-      ),
-    );
-
-    if (onTap != null) {
-      fieldContainer = _BouncingTap(
-        onTap: onTap,
-        child: AbsorbPointer(child: fieldContainer),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: _Tokens.textSecondary, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        fieldContainer,
-      ],
-    );
-  }
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ────────────────────────────────────────────────────────────
 // SHARED ANIMATED WIDGETS
-// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ────────────────────────────────────────────────────────────
 
 /// Ultra-Smooth Popup Transition (Scales and Fades seamlessly)
 class _SmoothPopupContainer extends StatelessWidget {
@@ -1124,7 +1149,7 @@ class _BouncingTapState extends State<_BouncingTap> with SingleTickerProviderSta
 
   Future<void> _handleTap() async {
     if (widget.onTap == null) return;
-    
+
     _controller.forward();
     await Future.delayed(const Duration(milliseconds: 70));
     if (mounted) _controller.reverse();
@@ -1154,6 +1179,7 @@ class _BouncingTapState extends State<_BouncingTap> with SingleTickerProviderSta
 class _RowInput extends StatelessWidget {
   final TextEditingController controller;
   final String label;
+  final bool mono;
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String>? onChanged;
@@ -1161,6 +1187,7 @@ class _RowInput extends StatelessWidget {
   const _RowInput({
     required this.controller,
     required this.label,
+    this.mono = false,
     this.keyboardType,
     this.inputFormatters,
     this.onChanged,
@@ -1179,7 +1206,13 @@ class _RowInput extends StatelessWidget {
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
         onChanged: onChanged,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _Tokens.textPrimary),
+        textAlign: mono ? TextAlign.right : TextAlign.left,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: _Tokens.textPrimary,
+          fontFamily: mono ? _Tokens.mono : null,
+        ),
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(fontSize: 11.5, color: _Tokens.textMuted),
@@ -1196,11 +1229,14 @@ class _PrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
   final bool loading;
+  final List<Color>? colors;
 
-  const _PrimaryButton({required this.label, required this.onTap, this.loading = false});
+  const _PrimaryButton({required this.label, required this.onTap, this.loading = false, this.colors});
 
   @override
   Widget build(BuildContext context) {
+    final gradientColors = colors ?? const [_Tokens.slate, _Tokens.slateDark];
+    final disabled = onTap == null && !loading;
     return _BouncingTap(
       onTap: loading ? null : onTap,
       child: Container(
@@ -1208,11 +1244,9 @@ class _PrimaryButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(_Tokens.rSm),
-          gradient: onTap == null && !loading
-              ? null
-              : const LinearGradient(colors: [_Tokens.primary, _Tokens.primaryDark]),
-          color: (onTap == null && !loading) ? _Tokens.borderStrong : null,
-          boxShadow: onTap != null ? _Tokens.shadowGlow : null,
+          gradient: disabled ? null : LinearGradient(colors: gradientColors),
+          color: disabled ? _Tokens.borderStrong : null,
+          boxShadow: disabled ? null : _Tokens.glow(gradientColors.first),
         ),
         child: loading
             ? const SizedBox(
@@ -1252,7 +1286,9 @@ class _SecondaryButton extends StatelessWidget {
 class _ChipButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
-  const _ChipButton({required this.label, required this.onTap});
+  final Color color;
+  final Color bg;
+  const _ChipButton({required this.label, required this.onTap, this.color = _Tokens.slate, this.bg = _Tokens.slateSoft});
 
   @override
   Widget build(BuildContext context) {
@@ -1261,10 +1297,10 @@ class _ChipButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: _Tokens.primarySoft,
+          color: bg,
           borderRadius: BorderRadius.circular(_Tokens.rLg),
         ),
-        child: Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _Tokens.primary)),
+        child: Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: color)),
       ),
     );
   }
@@ -1272,7 +1308,9 @@ class _ChipButton extends StatelessWidget {
 
 class _GhostAddButton extends StatelessWidget {
   final VoidCallback onTap;
-  const _GhostAddButton({required this.onTap});
+  final Color color;
+  final Color bg;
+  const _GhostAddButton({required this.onTap, this.color = _Tokens.slate, this.bg = _Tokens.slateSoft});
 
   @override
   Widget build(BuildContext context) {
@@ -1281,15 +1319,15 @@ class _GhostAddButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: _Tokens.primarySoft,
+          color: bg,
           borderRadius: BorderRadius.circular(_Tokens.rSm),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.add_rounded, size: 18, color: _Tokens.primary),
+            Icon(Icons.add_rounded, size: 18, color: color),
             const SizedBox(width: 4),
-            const Text('Add Row', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: _Tokens.primary)),
+            Text('Add Row', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: color)),
           ],
         ),
       ),
@@ -1301,6 +1339,8 @@ class _SelectableTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
+  final Color accent;
+  final Color accentSoft;
   final bool selected;
   final VoidCallback onTap;
 
@@ -1308,6 +1348,8 @@ class _SelectableTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.icon,
+    required this.accent,
+    required this.accentSoft,
     required this.selected,
     required this.onTap,
   });
@@ -1319,15 +1361,15 @@ class _SelectableTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? _Tokens.primarySoft : Colors.transparent,
+          color: selected ? accentSoft : Colors.transparent,
           borderRadius: BorderRadius.circular(_Tokens.rSm),
         ),
         child: Row(children: [
           Container(
             width: 36,
             height: 36,
-            decoration: BoxDecoration(color: _Tokens.canvas, borderRadius: BorderRadius.circular(_Tokens.rSm)),
-            child: Icon(icon, size: 18, color: _Tokens.primary),
+            decoration: BoxDecoration(color: accentSoft, borderRadius: BorderRadius.circular(_Tokens.rSm)),
+            child: Icon(icon, size: 18, color: accent),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1340,7 +1382,7 @@ class _SelectableTile extends StatelessWidget {
               ],
             ),
           ),
-          if (selected) const Icon(Icons.check_circle_rounded, color: _Tokens.primary, size: 20),
+          if (selected) Icon(Icons.check_circle_rounded, color: accent, size: 20),
         ]),
       ),
     );
@@ -1435,6 +1477,7 @@ class _MetaTag extends StatelessWidget {
 
 class _SheetShell extends StatelessWidget {
   final String title;
+  final Color accent;
   final TextEditingController searchController;
   final String searchHint;
   final VoidCallback onSearchChanged;
@@ -1442,6 +1485,7 @@ class _SheetShell extends StatelessWidget {
 
   const _SheetShell({
     required this.title,
+    this.accent = _Tokens.slate,
     required this.searchController,
     required this.searchHint,
     required this.onSearchChanged,
@@ -1477,6 +1521,7 @@ class _SheetShell extends StatelessWidget {
                 controller: searchController,
                 onChanged: (_) => onSearchChanged(),
                 style: const TextStyle(fontSize: 14, color: _Tokens.textPrimary),
+                cursorColor: accent,
                 decoration: InputDecoration(
                   hintText: searchHint,
                   hintStyle: const TextStyle(color: _Tokens.textMuted, fontSize: 13.5),
@@ -1512,7 +1557,7 @@ class _EmptyState extends StatelessWidget {
             Container(
               width: 56,
               height: 56,
-              decoration: BoxDecoration(color: _Tokens.canvas, shape: BoxShape.circle),
+              decoration: const BoxDecoration(color: _Tokens.canvas, shape: BoxShape.circle),
               child: Icon(icon, size: 26, color: _Tokens.textMuted),
             ),
             const SizedBox(height: 14),
@@ -1540,15 +1585,9 @@ class _LoadingState extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _skeleton(height: 64),
+          _skeleton(height: 96),
           const SizedBox(height: 14),
-          Row(children: [
-            Expanded(child: _skeleton(height: 58)),
-            const SizedBox(width: 12),
-            Expanded(child: _skeleton(height: 58)),
-          ]),
-          const SizedBox(height: 14),
-          _skeleton(height: 72),
+          _skeleton(height: 68),
           const SizedBox(height: 24),
           _skeleton(height: 18, width: 140),
           const SizedBox(height: 12),

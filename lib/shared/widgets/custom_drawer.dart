@@ -13,7 +13,7 @@ import 'package:sas_akount_login/features/ledger/ledger_master_screen.dart';
 import 'package:sas_akount_login/features/inventory/item_master_screen.dart';
 import 'package:sas_akount_login/features/sales/sales_entry_screen.dart'; // Adjust the path to wherever you saved it!
 import 'package:sas_akount_login/features/purchase/purchase_entry_screen.dart';
-// (Or import 'package:your_app_name/screens/purchase_entry_screen.dart'; depending on your setup)
+import 'package:sas_akount_login/features/sales/sales_order_entry_screen.dart';
 
 class CustomDrawer extends StatelessWidget {
   const CustomDrawer({super.key});
@@ -130,8 +130,9 @@ class CustomDrawer extends StatelessWidget {
                     iconBgColor: Colors.green.shade50,
                     iconColor: Colors.green.shade700,
                     items: [
-                      {'title': 'Sales Invoice', 'page': const SaleScreen()},
+                      {'title': 'Sales Order Entry', 'page': const SalesOrderEntryScreen()},
                       {'title': 'Sales Entry', 'page': const SalesEntryScreen()},
+                      {'title': 'Sales Invoice', 'page': const SaleScreen()},
                       {'title': 'Customer List', 'page': const ReceivableScreen()},
                     ],
                   ),
