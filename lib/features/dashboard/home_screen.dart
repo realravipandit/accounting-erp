@@ -1,9 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 👉 REQUIRED FOR TRANSPARENT SYSTEM BAR
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shimmer/shimmer.dart'; 
+import 'package:shimmer/shimmer.dart';
 
-// --- CORRECTED IMPORTS ---
-import 'package:sas_akount_login/services/dashboard/dashboard_service.dart'; // 👉 NEW: Using your DashboardService
+import 'package:sas_akount_login/services/dashboard/dashboard_service.dart';
 import 'package:sas_akount_login/features/sales/sale_screen.dart';
 import 'package:sas_akount_login/shared/widgets/custom_drawer.dart';
 import 'package:sas_akount_login/features/purchase/purchase_screen.dart';
@@ -15,7 +16,7 @@ import 'package:sas_akount_login/features/inventory/inventory_screen.dart';
 import 'package:sas_akount_login/features/reports/ageing_screen.dart';
 
 // ============================================================================
-// HOME PAGE: (Fast IndexedStack to match the instant tab switch)
+// HOME PAGE
 // ============================================================================
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -28,8 +29,14 @@ class _HomePageState extends State<HomePage> {
   bool _isSyncing = false;
   String _companyName = 'Dashboard';
   final _syncService = SyncService();
-  
-  final _pages = const [DashboardPage(), ReceivableScreen(), AddNewContentPage(), SaleScreen(), PayableScreen()];
+
+  final _pages = const [
+    DashboardPage(),
+    ReceivableScreen(),
+    AddNewContentPage(),
+    SaleScreen(),
+    PayableScreen(),
+  ];
 
   @override
   void initState() {
@@ -41,34 +48,54 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _onSyncPressed() async {
     setState(() => _isSyncing = true);
-    bool success = await _syncService.syncAll();
+    await _syncService.syncAll();
     if (!mounted) return;
     setState(() => _isSyncing = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
-      drawer: const CustomDrawer(),
-      appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0, centerTitle: true,
-        bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(color: const Color(0xFFEEF0FE), height: 1)),
-        title: Text(_companyName, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.w700)),
+    // 👉 FIX 1: AnnotatedRegion forces Android to drop the white system background
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+        systemNavigationBarContrastEnforced: false, 
       ),
-      // We use IndexedStack so the tabs switch instantly
-      body: SafeArea(child: IndexedStack(index: _currentIndex, children: _pages)),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed, backgroundColor: Colors.white, elevation: 12,
-        currentIndex: _currentIndex, onTap: (i) => setState(() => _currentIndex = i),
-        selectedItemColor: const Color(0xFF4F46E5), unselectedItemColor: const Color(0xFF9CA3AF),
-        items: [
-          const BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home_rounded), label: 'Home'),
-          const BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long_rounded), label: 'Receivables'),
-          BottomNavigationBarItem(label: '', icon: Container(padding: const EdgeInsets.all(10), decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF9333EA)])), child: const Icon(Icons.add_rounded, color: Colors.white))),
-          const BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), activeIcon: Icon(Icons.bar_chart_rounded), label: 'Sales'),
-          const BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), activeIcon: Icon(Icons.account_balance_wallet_rounded), label: 'Payables'),
-        ],
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF9FAFB),
+        drawer: const CustomDrawer(),
+        // REQUIRED for the glass effect: lets page content scroll UNDER the nav bar
+        extendBody: true,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: true,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(color: const Color(0xFFEEF0FE), height: 1),
+          ),
+          title: Text(
+            _companyName,
+            style: const TextStyle(
+              color: Color(0xFF0F172A),
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        
+        // 👉 FIX 2: Set bottom: false so the content flows beautifully under the glass navbar
+        body: SafeArea(
+          bottom: false, 
+          child: IndexedStack(index: _currentIndex, children: _pages),
+        ),
+        
+        bottomNavigationBar: _GlassBottomNav(
+          currentIndex: _currentIndex,
+          onTap: (i) => setState(() => _currentIndex = i),
+        ),
       ),
     );
   }
@@ -84,43 +111,48 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  // 👉 NEW: Using your DashboardService instead of ApiService directly
-  final _dashboardService = DashboardService(); 
-  
+  final _dashboardService = DashboardService();
+
   bool _isLoading = true;
   String _selectedPeriod = 'Last 24 Hours';
   DateTimeRange? _customRange;
-  
+
   double _salesAmt = 0, _purchAmt = 0, _custOut = 0, _vendOut = 0, _payables = 0, _receivables = 0, _stockVal = 0;
   int _salesQty = 0, _purchQty = 0, _stockQty = 0;
 
   @override
-  void initState() { super.initState(); _fetchData(); }
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
 
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
-    
     try {
-      // 👉 NEW: Calling the method from your DashboardService
-      final data = await _dashboardService.fetchDashboardSummary(period: _selectedPeriod, startDate: _customRange?.start, endDate: _customRange?.end);
+      final data = await _dashboardService.fetchDashboardSummary(
+        period: _selectedPeriod,
+        startDate: _customRange?.start,
+        endDate: _customRange?.end,
+      );
       if (mounted) {
         setState(() {
-          _salesAmt = (data['salesAmount'] as num?)?.toDouble() ?? 0.0; 
+          _salesAmt = (data['salesAmount'] as num?)?.toDouble() ?? 0.0;
           _salesQty = (data['salesQty'] as num?)?.toInt() ?? 0;
-          _purchAmt = (data['purchaseAmount'] as num?)?.toDouble() ?? 0.0; 
+          _purchAmt = (data['purchaseAmount'] as num?)?.toDouble() ?? 0.0;
           _purchQty = (data['purchaseQty'] as num?)?.toInt() ?? 0;
-          _custOut = (data['customerOutstanding'] as num?)?.toDouble() ?? 0.0; 
+          _custOut = (data['customerOutstanding'] as num?)?.toDouble() ?? 0.0;
           _vendOut = (data['vendorOutstanding'] as num?)?.toDouble() ?? 0.0;
-          _payables = (data['payables'] as num?)?.toDouble() ?? 0.0; 
+          _payables = (data['payables'] as num?)?.toDouble() ?? 0.0;
           _receivables = (data['receivables'] as num?)?.toDouble() ?? 0.0;
-          _stockQty = (data['stockQty'] as num?)?.toInt() ?? 0; 
+          _stockQty = (data['stockQty'] as num?)?.toInt() ?? 0;
           _stockVal = (data['stockValue'] as num?)?.toDouble() ?? 0.0;
         });
       }
-    } finally { if (mounted) setState(() => _isLoading = false); }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
-  // --- ✨ THE SHIMMER SKELETON BUILDER ---
   Widget _buildSkeletonLoader() {
     return Shimmer.fromColors(
       baseColor: Colors.grey.shade300,
@@ -152,10 +184,10 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // --- ACTUAL CONTENT BUILDERS ---
   Widget _cardBox(Color c, VoidCallback? onTap, Widget child) {
     return InkWell(
-      onTap: onTap, borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(color: c.withOpacity(0.04), borderRadius: BorderRadius.circular(20), border: Border.all(color: c.withOpacity(0.15), width: 1.5)),
@@ -165,7 +197,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _gridItem(String title, IconData icon, Color c, double amt, int? qty, String? sub, Widget screen) {
-    return Expanded(child: _cardBox(c, () => Navigator.push(context, MaterialPageRoute(builder: (_) => screen)), 
+    return Expanded(child: _cardBox(c, () => Navigator.push(context, MaterialPageRoute(builder: (_) => screen)),
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: Colors.white, size: 22)),
         const SizedBox(height: 24),
@@ -196,13 +228,14 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      color: const Color(0xFF4F46E5), onRefresh: _fetchData,
+      color: const Color(0xFF4F46E5),
+      onRefresh: _fetchData,
       child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(18),
-        child: _isLoading 
-            ? _buildSkeletonLoader() 
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 110), // extra bottom space for floating glass nav
+        child: _isLoading
+            ? _buildSkeletonLoader()
             : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          
           DropdownButtonHideUnderline(child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
@@ -220,24 +253,20 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 24),
           const Text('Overview', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
           const SizedBox(height: 16),
-
           Row(children: [
             _gridItem("Sales", Icons.trending_up, const Color(0xFF10B981), _salesAmt, _salesQty, null, const SaleScreen()),
             const SizedBox(width: 14),
             _gridItem("Purchases", Icons.shopping_bag, const Color(0xFF3B82F6), _purchAmt, _purchQty, null, const PurchaseScreen()),
           ]),
           const SizedBox(height: 14),
-
           _listItem("Outstanding Balance", Icons.account_balance_wallet, const Color(0xFFF59E0B), const OutstandingScreen(), "Customer: Rs. ", _custOut, "Vendor: Rs. ", _vendOut),
           const SizedBox(height: 14),
-
           Row(children: [
             _gridItem("Payables", Icons.arrow_upward, const Color(0xFFF43F5E), _payables, null, "To pay", const PayableScreen()),
             const SizedBox(width: 14),
             _gridItem("Receivables", Icons.arrow_downward, const Color(0xFF0EA5E9), _receivables, null, "To receive", const ReceivableScreen()),
           ]),
           const SizedBox(height: 14),
-
           _listItem("Inventory Status", Icons.inventory_2, const Color(0xFF6366F1), const InventoryScreen(), "Items in Stock: ", _stockQty.toDouble(), "Total Value: Rs. ", _stockVal),
           const SizedBox(height: 14),
           _listItem('Ageing Report', Icons.access_time, const Color(0xFFA855F7), const AgeingScreen(), "Customer Ageing", 0, "Vendor Ageing", 0, isStatic: true),
@@ -247,4 +276,206 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-class AddNewContentPage extends StatelessWidget { const AddNewContentPage({super.key}); @override Widget build(BuildContext context) => const Center(child: Text('Add New Content'));}
+class AddNewContentPage extends StatelessWidget {
+  const AddNewContentPage({super.key});
+  @override
+  Widget build(BuildContext context) => const Center(child: Text('Add New Content'));
+}
+
+// ============================================================================
+// FLOATING LIQUID-GLASS BOTTOM NAV
+// ============================================================================
+class _GlassBottomNav extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const _GlassBottomNav({required this.currentIndex, required this.onTap});
+
+  static const List<_NavItemData> _items = [
+    _NavItemData(index: 0, icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home'),
+    _NavItemData(index: 1, icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded, label: 'Receivables'),
+    _NavItemData(index: 3, icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart_rounded, label: 'Sales'),
+    _NavItemData(index: 4, icon: Icons.account_balance_wallet_outlined, activeIcon: Icons.account_balance_wallet_rounded, label: 'Payables'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: _GlassPill(currentIndex: currentIndex, onTap: onTap, items: _items),
+            ),
+            const SizedBox(width: 12),
+            _GlassAddButton(isSelected: currentIndex == 2, onTap: () => onTap(2)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItemData {
+  final int index;
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  const _NavItemData({required this.index, required this.icon, required this.activeIcon, required this.label});
+}
+
+class _GlassPill extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  final List<_NavItemData> items;
+
+  const _GlassPill({required this.currentIndex, required this.onTap, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedPos = items.indexWhere((e) => e.index == currentIndex);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: Container(
+          height: 64,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.02),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(color: Colors.white.withOpacity(0.30), width: 1),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4)),
+            ],
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = constraints.maxWidth / items.length;
+              return Stack(
+                children: [
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 420),
+                    curve: Curves.easeOutBack,
+                    left: selectedPos >= 0 ? itemWidth * selectedPos + 6 : 0,
+                    top: 6,
+                    bottom: 6,
+                    width: itemWidth - 12,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: selectedPos >= 0 ? 1 : 0,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.30),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: Colors.white.withOpacity(0.45), width: 1),
+                          boxShadow: [
+                            BoxShadow(color: Colors.white.withOpacity(0.25), blurRadius: 14, spreadRadius: 1),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: items.map((item) {
+                      final selected = item.index == currentIndex;
+                      return SizedBox(
+                        width: itemWidth,
+                        height: 64,
+                        child: InkWell(
+                          onTap: () => onTap(item.index),
+                          borderRadius: BorderRadius.circular(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 200),
+                                transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                                child: Icon(
+                                  selected ? item.activeIcon : item.icon,
+                                  key: ValueKey(selected),
+                                  size: 22,
+                                  color: selected ? const Color(0xFF312E81) : const Color(0xFF1F2937).withOpacity(0.75),
+                                  shadows: const [Shadow(color: Colors.black26, blurRadius: 6)],
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                item.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                  color: selected ? const Color(0xFF312E81) : const Color(0xFF1F2937).withOpacity(0.75),
+                                  shadows: const [Shadow(color: Colors.black26, blurRadius: 6)],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassAddButton extends StatelessWidget {
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _GlassAddButton({required this.isSelected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF4F46E5).withOpacity(isSelected ? 0.38 : 0.24),
+                  const Color(0xFF9333EA).withOpacity(isSelected ? 0.38 : 0.24),
+                ],
+              ),
+              border: Border.all(color: Colors.white.withOpacity(0.4), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF4F46E5).withOpacity(isSelected ? 0.22 : 0.12),
+                  blurRadius: isSelected ? 16 : 10,
+                  spreadRadius: isSelected ? 1 : 0,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: AnimatedRotation(
+              duration: const Duration(milliseconds: 250),
+              turns: isSelected ? 0.125 : 0,
+              child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
