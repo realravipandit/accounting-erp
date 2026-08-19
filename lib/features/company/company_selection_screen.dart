@@ -1,35 +1,30 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sas_akount_login/services/auth/auth_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sas_akount_login/features/dashboard/home_screen.dart';
 import 'package:sas_akount_login/features/auth/login_screen.dart';
 import 'package:sas_akount_login/services/dashboard/dashboard_service.dart';
 
-class _Tokens {
-  static const background = Color(0xFFF7F8FC);
-  static const surface = Colors.white;
-  static const text = Color(0xFF1D2433);
-  static const mutedText = Color(0xFF7A8497);
-  static const border = Color(0xFFE9ECF3);
-
-  static const primary = Color(0xFF5B5FEF);
-  static const primaryDark = Color(0xFF4549D8);
-  static const primarySoft = Color(0xFFEDEEFF);
-
-  static const sky = Color(0xFFE7F4FF);
-  static const lavender = Color(0xFFF0EDFF);
-  static const success = Color(0xFF24A26A);
-  static const danger = Color(0xFFD94C4C);
-
-  static const headingFont = 'Space Grotesk';
+// --- Sunrise Theme Colors ---
+class SunriseTheme {
+  static const Color bgTop = Color(0xFF9BBDE2);
+  static const Color bgMid = Color(0xFFD4E2DF);
+  static const Color bgBottom = Color(0xFFF6E6CD);
+  static const Color cardBg = Color(0xFFF9F5EC);
+  static const Color btnBg = Color(0xFFE3DCC8);
+  static const Color textMain = Color(0xFF1A1B1C);
+  static const Color textMuted = Color(0xFF6B6A66);
+  static const Color accent = Color(0xFF9BBDE2);
+  static const Color danger = Color(0xFFD94C4C);
 }
 
 class CompanySelectionScreen extends StatefulWidget {
   const CompanySelectionScreen({super.key});
 
   @override
-  State<CompanySelectionScreen> createState() =>
-      _CompanySelectionScreenState();
+  State<CompanySelectionScreen> createState() => _CompanySelectionScreenState();
 }
 
 class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
@@ -38,7 +33,6 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
 
   List<dynamic> _companies = [];
   Map<String, dynamic>? _selectedCompany;
-
   bool _isLoading = true;
   bool _isContinuing = false;
   String _errorMessage = '';
@@ -57,16 +51,13 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
 
     try {
       final companies = await _apiService.getCompanies();
-
       if (!mounted) return;
-
       setState(() {
         _companies = companies;
         _isLoading = false;
       });
     } catch (error) {
       if (!mounted) return;
-
       setState(() {
         _errorMessage = error.toString();
         _isLoading = false;
@@ -84,12 +75,10 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
         key: 'selected_company_id',
         value: _selectedCompany!['CompanyID']?.toString() ?? '',
       );
-
       await _storage.write(
         key: 'selected_company_code',
         value: _selectedCompany!['CompanyCode']?.toString() ?? '',
       );
-
       await _storage.write(
         key: 'selected_company_name',
         value: _selectedCompany!['CompanyName']?.toString() ?? '',
@@ -112,12 +101,13 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
       );
     } catch (_) {
       if (!mounted) return;
-
       setState(() => _isContinuing = false);
-
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to save your selected workspace.'),
+        SnackBar(
+          content: const Text('Unable to save your selected workspace.', style: TextStyle(color: Colors.white)),
+          backgroundColor: SunriseTheme.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       );
     }
@@ -138,16 +128,43 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _Tokens.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildHeroSection(),
-            Expanded(child: _buildContent()),
-            _buildBottomBar(),
-          ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+        systemNavigationBarContrastEnforced: false,
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        systemStatusBarContrastEnforced: false,
+      ),
+      child: Scaffold(
+        extendBody: true,
+        extendBodyBehindAppBar: true,
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                SunriseTheme.bgTop,
+                SunriseTheme.bgMid,
+                SunriseTheme.bgBottom,
+              ],
+              stops: [0.0, 0.45, 1.0],
+            ),
+          ),
+          child: SafeArea(
+            bottom: false, // Let the bottom bar handle the safe area for edge-to-edge design
+            child: Column(
+              children: [
+                _buildHeader(),
+                _buildHeroSection(),
+                Expanded(child: _buildContent()),
+                _buildBottomBar(),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -155,39 +172,41 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+      padding: const EdgeInsets.fromLTRB(20, 16, 12, 10),
       child: Row(
         children: [
+          // Logo Pill
           Container(
-            height: 55,
-            width: 150,
-            padding: const EdgeInsets.all(7),
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: _Tokens.border),
+              color: Colors.white.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(50),
             ),
             child: Image.asset(
               'assets/images/logo.png',
               fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.layers_rounded,
+                color: SunriseTheme.textMain,
+              ),
             ),
           ),
           const Spacer(),
           IconButton(
             onPressed: _loadCompanies,
             tooltip: 'Refresh companies',
-            icon: const Icon(
+            icon: Icon(
               Icons.refresh_rounded,
-              color: _Tokens.mutedText,
+              color: SunriseTheme.textMain.withOpacity(0.7),
             ),
           ),
-          const SizedBox(width: 4),
           IconButton(
             onPressed: _logout,
             tooltip: 'Logout',
             icon: const Icon(
               Icons.logout_rounded,
-              color: _Tokens.danger,
+              color: SunriseTheme.danger,
             ),
           ),
         ],
@@ -196,104 +215,40 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
   }
 
   Widget _buildHeroSection() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(20, 10, 20, 18),
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _Tokens.lavender,
-            _Tokens.sky,
-          ],
-        ),
-      ),
-      child: Stack(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Positioned(
-            right: -12,
-            top: -18,
-            child: Container(
-              width: 94,
-              height: 94,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.38),
-                shape: BoxShape.circle,
-              ),
+          const Text(
+            'Welcome back',
+            style: TextStyle(
+              fontSize: 16,
+              color: SunriseTheme.textMuted,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          Positioned(
-            right: 42,
-            bottom: -38,
-            child: Container(
-              width: 82,
-              height: 82,
-              decoration: BoxDecoration(
-                color: _Tokens.primary.withValues(alpha: 0.10),
-                shape: BoxShape.circle,
-              ),
+          const SizedBox(height: 8),
+          const Text(
+            'Choose a workspace',
+            style: TextStyle(
+              fontFamily: 'Outfit', // Or your custom font
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              color: SunriseTheme.textMain,
+              letterSpacing: -0.5,
+              height: 1.1,
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.75),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.grid_view_rounded,
-                      color: _Tokens.primary,
-                      size: 15,
-                    ),
-                    SizedBox(width: 6),
-                    Text(
-                      'WORKSPACES',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
-                        color: _Tokens.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Choose where\nyou want to work.',
-                style: TextStyle(
-                  fontFamily: _Tokens.headingFont,
-                  fontSize: 28,
-                  height: 1.12,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.7,
-                  color: _Tokens.text,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                _isLoading
-                    ? 'Loading your available companies...'
-                    : '${_companies.length} workspace${_companies.length == 1 ? '' : 's'} available for you',
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: _Tokens.mutedText,
-                  height: 1.4,
-                ),
-              ),
-            ],
+          const SizedBox(height: 12),
+          Text(
+            _isLoading
+                ? 'Loading your available companies...'
+                : '${_companies.length} workspace${_companies.length == 1 ? '' : 's'} available for you',
+            style: TextStyle(
+              fontSize: 14,
+              color: SunriseTheme.textMain.withOpacity(0.6),
+            ),
           ),
         ],
       ),
@@ -304,33 +259,28 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
     if (_isLoading && _companies.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(
-          color: _Tokens.primary,
+          color: SunriseTheme.textMain,
           strokeWidth: 2.5,
         ),
       );
     }
-
     if (_errorMessage.isNotEmpty) {
       return _buildErrorState();
     }
-
     if (_companies.isEmpty) {
       return _buildEmptyState();
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 40), // Extra padding for bottom bar
       physics: const BouncingScrollPhysics(),
       itemCount: _companies.length,
       itemBuilder: (context, index) {
         final company = Map<String, dynamic>.from(_companies[index] as Map);
-
         return _CompanyCard(
-          index: index,
           name: company['CompanyName']?.toString() ?? 'Unknown Company',
           code: company['CompanyCode']?.toString() ?? 'N/A',
-          isSelected:
-              _selectedCompany?['CompanyID'] == company['CompanyID'],
+          isSelected: _selectedCompany?['CompanyID'] == company['CompanyID'],
           onTap: () => _selectCompany(company),
         );
       },
@@ -343,51 +293,65 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
         padding: const EdgeInsets.all(24),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(22),
+          padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
-            color: _Tokens.surface,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: _Tokens.border),
+            color: SunriseTheme.cardBg,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 40,
+                offset: const Offset(0, 10),
+              )
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 52,
-                height: 52,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFFEEEE),
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: SunriseTheme.danger.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.cloud_off_rounded,
-                  color: _Tokens.danger,
+                  color: SunriseTheme.danger,
+                  size: 32,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 24),
               const Text(
                 'Unable to load workspaces',
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontFamily: _Tokens.headingFont,
                   fontWeight: FontWeight.w700,
-                  fontSize: 17,
-                  color: _Tokens.text,
+                  fontSize: 20,
+                  color: SunriseTheme.textMain,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Text(
                 _errorMessage,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: _Tokens.mutedText,
-                  fontSize: 13,
+                  color: SunriseTheme.textMuted,
+                  fontSize: 14,
                 ),
               ),
-              const SizedBox(height: 18),
-              OutlinedButton.icon(
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
                 onPressed: _loadCompanies,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Try again'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SunriseTheme.btnBg,
+                  foregroundColor: SunriseTheme.textMain,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                label: const Text('Try again', style: TextStyle(fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -398,43 +362,59 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Container(
-        margin: const EdgeInsets.all(24),
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          color: _Tokens.surface,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: _Tokens.border),
-        ),
-        child: const Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.business_center_outlined,
-              size: 38,
-              color: _Tokens.mutedText,
-            ),
-            SizedBox(height: 14),
-            Text(
-              'No workspaces found',
-              style: TextStyle(
-                fontFamily: _Tokens.headingFont,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: _Tokens.text,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: SunriseTheme.cardBg,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 40,
+                offset: const Offset(0, 10),
+              )
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: SunriseTheme.textMain.withOpacity(0.05),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.business_center_outlined,
+                  size: 32,
+                  color: SunriseTheme.textMuted,
+                ),
               ),
-            ),
-            SizedBox(height: 7),
-            Text(
-              'Ask your administrator to assign a company to your account.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _Tokens.mutedText,
-                fontSize: 13,
-                height: 1.4,
+              const SizedBox(height: 24),
+              const Text(
+                'No workspaces found',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: SunriseTheme.textMain,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              const Text(
+                'Ask your administrator to assign a company to your account.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: SunriseTheme.textMuted,
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -442,225 +422,87 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
 
   Widget _buildBottomBar() {
     final canContinue = _selectedCompany != null && !_isContinuing;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        border: const Border(
-          top: BorderSide(color: _Tokens.border),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_selectedCompany != null) ...[
-              Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle_rounded,
-                    size: 17,
-                    color: _Tokens.success,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _selectedCompany!['CompanyName']?.toString() ?? '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: _Tokens.text,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-            ],
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed: canContinue ? _handleContinue : null,
-                style: ElevatedButton.styleFrom(
-                  elevation: 0,
-                  backgroundColor: _Tokens.primary,
-                  disabledBackgroundColor: _Tokens.primarySoft,
-                  foregroundColor: Colors.white,
-                  disabledForegroundColor: _Tokens.mutedText,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: _isContinuing
-                    ? const SizedBox(
-                        width: 21,
-                        height: 21,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Continue to workspace',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          SizedBox(width: 10),
-                          Icon(Icons.arrow_forward_rounded, size: 20),
-                        ],
-                      ),
-              ),
+    
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.3),
+            border: Border(
+              top: BorderSide(color: Colors.white.withOpacity(0.4)),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CompanyCard extends StatelessWidget {
-  final int index;
-  final String name;
-  final String code;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _CompanyCard({
-    required this.index,
-    required this.name,
-    required this.code,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  Color get _iconColor {
-    const colors = [
-      Color(0xFF5B5FEF),
-      Color(0xFF159C73),
-      Color(0xFFE87845),
-      Color(0xFF9A5FE8),
-      Color(0xFF1685C7),
-    ];
-
-    return colors[index % colors.length];
-  }
-
-  Color get _iconBackground {
-    const colors = [
-      Color(0xFFEDEEFF),
-      Color(0xFFE6F7F0),
-      Color(0xFFFFEEE7),
-      Color(0xFFF2EAFF),
-      Color(0xFFE6F4FD),
-    ];
-
-    return colors[index % colors.length];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: _Tokens.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isSelected ? _Tokens.primary : _Tokens.border,
-          width: isSelected ? 1.6 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isSelected
-                ? _Tokens.primary.withValues(alpha: 0.14)
-                : Colors.black.withValues(alpha: 0.025),
-            blurRadius: isSelected ? 18 : 10,
-            offset: const Offset(0, 5),
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: isSelected ? _Tokens.primarySoft : _iconBackground,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(
-                    Icons.domain_rounded,
-                    color: isSelected ? _Tokens.primary : _iconColor,
-                    size: 23,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                if (_selectedCompany != null) ...[
+                  Row(
                     children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: _Tokens.headingFont,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15.5,
-                          color: _Tokens.text,
-                        ),
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        size: 18,
+                        color: SunriseTheme.textMain,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Company code  Ã‚Â·  $code',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: _Tokens.mutedText,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _selectedCompany!['CompanyName']?.toString() ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: SunriseTheme.textMain,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 10),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 25,
-                  height: 25,
-                  decoration: BoxDecoration(
-                    color: isSelected ? _Tokens.primary : Colors.transparent,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isSelected ? _Tokens.primary : _Tokens.border,
-                      width: 1.5,
+                  const SizedBox(height: 16),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: canContinue ? _handleContinue : null,
+                    style: ElevatedButton.styleFrom(
+                      elevation: 0,
+                      backgroundColor: SunriseTheme.btnBg,
+                      disabledBackgroundColor: SunriseTheme.btnBg.withOpacity(0.5),
+                      foregroundColor: SunriseTheme.textMain,
+                      disabledForegroundColor: SunriseTheme.textMuted,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(50), // Fully rounded pill
+                      ),
                     ),
+                    child: _isContinuing
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(SunriseTheme.textMain),
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Continue to workspace',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(Icons.arrow_forward_rounded, size: 20),
+                            ],
+                          ),
                   ),
-                  child: isSelected
-                      ? const Icon(
-                          Icons.check_rounded,
-                          color: Colors.white,
-                          size: 16,
-                        )
-                      : null,
                 ),
               ],
             ),
@@ -671,3 +513,97 @@ class _CompanyCard extends StatelessWidget {
   }
 }
 
+class _CompanyCard extends StatelessWidget {
+  final String name;
+  final String code;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _CompanyCard({
+    required this.name,
+    required this.code,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutBack, // The elastic liquid bounce physics
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white.withOpacity(0.6) : SunriseTheme.cardBg.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isSelected ? SunriseTheme.accent : Colors.white.withOpacity(0.4),
+            width: isSelected ? 2 : 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isSelected ? 0.08 : 0.02),
+              blurRadius: isSelected ? 20 : 10,
+              offset: Offset(0, isSelected ? 8 : 4),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            // Smooth Avatar Icon
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 350),
+              height: 48,
+              width: 48,
+              decoration: BoxDecoration(
+                color: isSelected ? SunriseTheme.accent.withOpacity(0.2) : Colors.black.withOpacity(0.04),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.domain_rounded,
+                  color: isSelected ? SunriseTheme.textMain : SunriseTheme.textMuted,
+                  size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            
+            // Company Details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                      fontSize: 16,
+                      color: SunriseTheme.textMain,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Code: $code',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: SunriseTheme.textMuted.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Selection Indicator
+            if (isSelected)
+              const Icon(Icons.check_circle_rounded, color: SunriseTheme.textMain, size: 24),
+          ],
+        ),
+      ),
+    );
+  }
+}

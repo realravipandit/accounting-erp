@@ -1,4 +1,6 @@
+import 'dart:ui'; // Required for ImageFilter.blur in the liquid toggle
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Required for AnnotatedRegion & SystemUIOverlayStyle
 import 'package:sas_akount_login/services/auth/auth_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sas_akount_login/core/database/db_helper.dart';
@@ -21,34 +23,40 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
   final FocusNode _passwordFocus = FocusNode();
   final DBHelper _dbHelper = DBHelper();
   final AuthService _apiService = AuthService();
+
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _rememberMe = false;
-
-  // State for Database Toggle (false = Billing, true = Akount)
   bool _isAkountMaster = false;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
+  // --- Theme Colors: Sunrise Vibe ---
+  final Color _cardBg = const Color(0xFFF9F5EC); 
+  final Color _inputBg = const Color(0xFFE8E2D2); 
+  final Color _btnBg = const Color(0xFFE3DCC8); 
+  final Color _textMain = const Color(0xFF1A1B1C); 
+  final Color _textMuted = const Color(0xFF6B6A66); 
+  final Color _accentColor = const Color(0xFF9BBDE2); 
+
   @override
   void initState() {
     super.initState();
-    // Load saved credentials and persistent database choice on screen load
     _loadSavedData();
-
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
-
-    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.04),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
 
     _usernameFocus.addListener(() => setState(() {}));
@@ -56,7 +64,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     _animationController.forward();
   }
 
-  // Fetch and inject saved credentials and persistent database preference
   Future<void> _loadSavedData() async {
     final savedRememberMe = await _storage.read(key: 'remember_me');
     if (savedRememberMe == 'true') {
@@ -70,8 +77,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
         });
       }
     }
-
-    // Load saved database toggle preference
     final savedDbMode = await _storage.read(key: 'saved_central_db');
     if (savedDbMode != null && mounted) {
       setState(() {
@@ -83,24 +88,18 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
   void _login() async {
     FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
-
-    String username = _usernameController.text.trim();
-    String password = _passwordController.text;
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
 
     if (username.isEmpty || password.isEmpty) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in both username and password')),
-      );
+      _showSnack('Please fill in both username and password', isError: true);
       return;
     }
-
-    // Determine hidden database name based on toggle state
-    String hiddenTargetDatabase = _isAkountMaster ? 'SmAkountMaster' : 'SASBillingMaster';
+    final targetDb = _isAkountMaster ? 'SmAkountMaster' : 'SASBillingMaster';
 
     try {
-      bool isAuthenticated = await _apiService.login(username, password, hiddenTargetDatabase);
-
+      final isAuthenticated = await _apiService.login(username, password, targetDb);
       if (!mounted) return;
 
       if (isAuthenticated) {
@@ -113,38 +112,37 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
           await _storage.delete(key: 'saved_password');
           await _storage.write(key: 'remember_me', value: 'false');
         }
-
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const CompanySelectionScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 400),
+            pageBuilder: (_, __, ___) => const CompanySelectionScreen(),
+            transitionsBuilder: (_, animation, __, child) =>
+                FadeTransition(opacity: animation, child: child),
+            transitionDuration: const Duration(milliseconds: 350),
           ),
         );
       } else {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid username or password.'),
-            backgroundColor: Color(0xFFEF4444),
-          ),
-        );
+        _showSnack('Invalid username or password.', isError: true);
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connection failed: Unable to reach the server.'),
-          backgroundColor: Color(0xFFD97706),
-          duration: Duration(seconds: 4),
-        ),
-      );
+      _showSnack('Connection failed: Unable to reach the server.', isError: true);
       debugPrint('Backend Connection Error: $e');
     }
+  }
+
+  void _showSnack(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+        backgroundColor: isError ? const Color(0xFFE11D48) : const Color(0xFF9BBDE2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
@@ -159,415 +157,416 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
 
   @override
   Widget build(BuildContext context) {
-    final Color scaffoldBackground = _isAkountMaster
-        ? Colors.blueGrey[50]!
-        : const Color(0xFFF9FAFB);
-
-    return Scaffold(
-      extendBody: true, // Ã°Å¸Å’Å¸ Extends the background all the way down behind the gesture bar
-      backgroundColor: scaffoldBackground,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          Row(
-            children: [
-              Text(
-                'Billing',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: !_isAkountMaster ? FontWeight.bold : FontWeight.normal,
-                  color: !_isAkountMaster ? const Color(0xFF4F46E5) : Colors.grey,
-                ),
-              ),
-              Switch(
-                value: _isAkountMaster,
-                activeThumbColor: const Color(0xFF9333EA),
-                inactiveThumbColor: const Color(0xFF4F46E5),
-                inactiveTrackColor: const Color(0xFFEEF0FE),
-                onChanged: (bool value) async {
-                  setState(() {
-                    _isAkountMaster = value;
-                  });
-                  // Save toggle preference instantly to secure storage
-                  await _storage.write(key: 'saved_central_db', value: value.toString());
-                },
-              ),
-              Text(
-                'Akount',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: _isAkountMaster ? FontWeight.bold : FontWeight.normal,
-                  color: _isAkountMaster ? const Color(0xFF9333EA) : Colors.grey,
-                ),
-              ),
-              const SizedBox(width: 16),
-            ],
-          )
-        ],
+    // AnnotatedRegion explicitly tells the system to keep the gesture bar transparent on this screen
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark, 
+        systemNavigationBarContrastEnforced: false, // Forces Android to drop the translucent background
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        systemStatusBarContrastEnforced: false,
       ),
-      body: Container(
-        color: scaffoldBackground,
-        child: Stack(
-          children: [
-            SafeArea(
-              bottom: false, // Ã°Å¸Å’Å¸ Lets the bottom content flow transparently under the gesture bar
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 20.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(28.0),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(color: const Color(0xFFEEF0FE), width: 1),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF4F46E5).withValues(alpha: 0.10),
-                              blurRadius: 40,
-                              spreadRadius: -6,
-                              offset: const Offset(0, 20),
-                            ),
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Center(
-                              child: Hero(
-                                tag: 'app_logo_animation',
-                                child: Image.asset(
-                                  'assets/images/logo.png',
-                                  height: 50,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 32),
-                            SlideTransition(
-                              position: _slideAnimation,
-                              child: FadeTransition(
-                                opacity: _fadeAnimation,
-                                child: Column(
-                                  children: [
-                                    Center(
-                                      child: ShaderMask(
-                                        shaderCallback: (bounds) => const LinearGradient(
-                                          colors: [Color(0xFF4F46E5), Color(0xFF9333EA)],
-                                          begin: Alignment.centerLeft,
-                                          end: Alignment.centerRight,
-                                        ).createShader(bounds),
-                                        child: const Text(
-                                          'Log in to your account',
-                                          style: TextStyle(
-                                            fontSize: 26,
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.white,
-                                            letterSpacing: -0.6,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    const Center(
-                                      child: Text(
-                                        'Welcome back! Please enter your details.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w400,
-                                          color: Color(0xFF6B7280),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 40),
-                                    TweenAnimationBuilder<double>(
-                                      tween: Tween<double>(begin: 1.0, end: _usernameFocus.hasFocus ? 1.02 : 1.0),
-                                      duration: const Duration(milliseconds: 200),
-                                      curve: Curves.easeOutCubic,
-                                      builder: (context, scale, child) {
-                                        return Transform.scale(
-                                          scale: scale,
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(14),
-                                              boxShadow: _usernameFocus.hasFocus ? [
-                                                BoxShadow(
-                                                  color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
-                                                  blurRadius: 16,
-                                                  offset: const Offset(0, 6),
-                                                )
-                                              ] : null,
-                                            ),
-                                            child: TextFormField(
-                                              controller: _usernameController,
-                                              focusNode: _usernameFocus,
-                                              style: const TextStyle(color: Color(0xFF0F172A)),
-                                              decoration: InputDecoration(
-                                                labelText: 'Username',
-                                                hintText: _usernameFocus.hasFocus ? 'Enter your username' : '',
-                                                labelStyle: const TextStyle(color: Color(0xFF6B7280), fontSize: 15),
-                                                floatingLabelStyle: const TextStyle(
-                                                  color: Color(0xFF4F46E5),
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w600
-                                                ),
-                                                floatingLabelBehavior: FloatingLabelBehavior.auto,
-                                                prefixIcon: Icon(
-                                                  Icons.person_outline,
-                                                  color: _usernameFocus.hasFocus ? const Color(0xFF4F46E5) : const Color(0xFF9CA3AF),
-                                                ),
-                                                filled: true,
-                                                fillColor: const Color(0xFFF8F9FC),
-                                                border: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  borderSide: const BorderSide(color: Color(0xFFE9EAF2)),
-                                                ),
-                                                enabledBorder: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  borderSide: const BorderSide(color: Color(0xFFE9EAF2)),
-                                                ),
-                                                focusedBorder: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.6),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(height: 24),
-                                    TweenAnimationBuilder<double>(
-                                      tween: Tween<double>(begin: 1.0, end: _passwordFocus.hasFocus ? 1.02 : 1.0),
-                                      duration: const Duration(milliseconds: 200),
-                                      curve: Curves.easeOutCubic,
-                                      builder: (context, scale, child) {
-                                        return Transform.scale(
-                                          scale: scale,
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(14),
-                                              boxShadow: _passwordFocus.hasFocus ? [
-                                                BoxShadow(
-                                                  color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
-                                                  blurRadius: 16,
-                                                  offset: const Offset(0, 6),
-                                                )
-                                              ] : null,
-                                            ),
-                                            child: TextFormField(
-                                              controller: _passwordController,
-                                              focusNode: _passwordFocus,
-                                              obscureText: _obscurePassword,
-                                              style: const TextStyle(color: Color(0xFF0F172A)),
-                                              decoration: InputDecoration(
-                                                labelText: 'Password',
-                                                hintText: _passwordFocus.hasFocus ? '--------' : '',
-                                                labelStyle: const TextStyle(color: Color(0xFF6B7280), fontSize: 15),
-                                                floatingLabelStyle: const TextStyle(
-                                                  color: Color(0xFF4F46E5),
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w600
-                                                ),
-                                                floatingLabelBehavior: FloatingLabelBehavior.auto,
-                                                prefixIcon: Icon(
-                                                  Icons.lock_outline,
-                                                  color: _passwordFocus.hasFocus ? const Color(0xFF4F46E5) : const Color(0xFF9CA3AF),
-                                                ),
-                                                filled: true,
-                                                fillColor: const Color(0xFFF8F9FC),
-                                                border: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  borderSide: const BorderSide(color: Color(0xFFE9EAF2)),
-                                                ),
-                                                enabledBorder: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  borderSide: const BorderSide(color: Color(0xFFE9EAF2)),
-                                                ),
-                                                focusedBorder: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.6),
-                                                ),
-                                                suffixIcon: IconButton(
-                                                  icon: Icon(
-                                                    _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                                    color: const Color(0xFF9CA3AF),
-                                                  ),
-                                                  onPressed: () {
-                                                    setState(() {
-                                                      _obscurePassword = !_obscurePassword;
-                                                    });
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(height: 20),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            SizedBox(
-                                              height: 24,
-                                              width: 24,
-                                              child: Checkbox(
-                                                value: _rememberMe,
-                                                activeColor: const Color(0xFF4F46E5),
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                                side: const BorderSide(color: Color(0xFFD1D5DB)),
-                                                onChanged: (value) {
-                                                  setState(() {
-                                                    _rememberMe = value ?? false;
-                                                  });
-                                                },
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            const Text(
-                                              'Remember me !',
-                                              style: TextStyle(
-                                                color: Color(0xFF374151),
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        GestureDetector(
-                                          onTap: () {},
-                                          child: const Text(
-                                            'Forgot password?',
-                                            style: TextStyle(
-                                              color: Color(0xFF4F46E5),
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 32),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 52,
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(14),
-                                          gradient: const LinearGradient(
-                                            colors: [Color(0xFF4F46E5), Color(0xFF9333EA)],
-                                            begin: Alignment.centerLeft,
-                                            end: Alignment.centerRight,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFF4F46E5).withValues(alpha: 0.30),
-                                              blurRadius: 20,
-                                              offset: const Offset(0, 10),
-                                            ),
-                                          ],
-                                        ),
-                                        child: ElevatedButton(
-                                          onPressed: _login,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.transparent,
-                                            shadowColor: Colors.transparent,
-                                            foregroundColor: Colors.white,
-                                            elevation: 0,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(14),
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'Sign In',
-                                            style: TextStyle(
-                                              fontSize: 15.5,
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: 0.3,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const Text(
-                                          "Don't have an account? ",
-                                          style: TextStyle(color: Color(0xFF6B7280), fontSize: 14),
-                                        ),
-                                        GestureDetector(
-                                          onTap: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => const RegisterScreen(),
-                                              ),
-                                            );
-                                          },
-                                          child: const Text(
-                                            'Sign up',
-                                            style: TextStyle(
-                                              color: Color(0xFF4F46E5),
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      const Text(
-                        'By signing in, you agree to our Terms of Service\nand Privacy Policy.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF9CA3AF),
-                          fontSize: 12,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+      child: Scaffold(
+        // extendBody is crucial: it forces the background to draw UNDER the transparent gesture bar
+        extendBody: true,
+        extendBodyBehindAppBar: true,
+        
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF9BBDE2), // Sky Blue
+                Color(0xFFD4E2DF), // Muted Transition
+                Color(0xFFF6E6CD), // Peach/Cream
+              ],
+              stops: [0.0, 0.45, 1.0],
             ),
-            if (_isLoading)
-              AnimatedOpacity(
-                opacity: _isLoading ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 200),
-                child: Container(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  child: const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4F46E5)),
+          ),
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Liquid Toggle
+                        _buildToggle(),
+                        const SizedBox(height: 40),
+                        
+                        // Main Card
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
+                          decoration: BoxDecoration(
+                            color: _cardBg,
+                            borderRadius: BorderRadius.circular(32),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 40,
+                                offset: const Offset(0, 10),
+                              )
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Logo
+                              Center(
+                                child: Hero(
+                                  tag: 'app_logo_animation',
+                                  child: Image.asset(
+                                    'assets/images/logo.png',
+                                    height: 48,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      Icons.layers_rounded,
+                                      size: 48,
+                                      color: _textMain,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 28),
+                              Text(
+                                'Sign in to SAS',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w600,
+                                  color: _textMain,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Welcome back to your workspace',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: _textMuted,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                              const SizedBox(height: 36),
+                              
+                              // Username Input
+                              _buildInput(
+                                controller: _usernameController,
+                                focusNode: _usernameFocus,
+                                label: 'Username',
+                                icon: Icons.person_outline_rounded,
+                                obscure: false,
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              // Password Input
+                              _buildInput(
+                                controller: _passwordController,
+                                focusNode: _passwordFocus,
+                                label: 'Password',
+                                icon: Icons.lock_outline_rounded,
+                                obscure: _obscurePassword,
+                                isPassword: true,
+                              ),
+                              const SizedBox(height: 20),
+                              
+                              // Remember + Forgot Password
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => setState(() => _rememberMe = !_rememberMe),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 20,
+                                          height: 20,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: _rememberMe ? _accentColor : _textMuted.withOpacity(0.5),
+                                              width: 1.5,
+                                            ),
+                                            color: _rememberMe ? _accentColor : Colors.transparent,
+                                          ),
+                                          child: _rememberMe
+                                              ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          'Remember me',
+                                          style: TextStyle(color: _textMuted, fontSize: 14),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {}, // TODO: Implement forgot password
+                                    child: Text(
+                                      'Forgot password?',
+                                      style: TextStyle(
+                                        color: _textMain,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 36),
+                              
+                              // Sign In Button
+                              SizedBox(
+                                height: 54,
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _login,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _btnBg,
+                                    foregroundColor: _textMain,
+                                    disabledBackgroundColor: _btnBg.withOpacity(0.5),
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(50), 
+                                    ),
+                                  ),
+                                  child: _isLoading
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                            color: Colors.black87,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Sign In',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        
+                        // Create account
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              "Don't have an account? ",
+                              style: TextStyle(color: _textMain.withOpacity(0.7), fontSize: 14),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                                );
+                              },
+                              child: Text(
+                                'Create one',
+                                style: TextStyle(
+                                  color: _textMain,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'By signing in, you agree to our Terms of Service\nand Privacy Policy.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _textMain.withOpacity(0.5),
+                            fontSize: 12,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-          ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Liquid Glass Elastic Toggle Switch
+  // Liquid Glass Elastic Toggle Switch
+  Widget _buildToggle() {
+    return Container(
+      height: 56, // Matched to the video's proportions
+      width: 280,
+      padding: const EdgeInsets.all(6), // Inner padding creates the track effect
+      decoration: BoxDecoration(
+        // The track: Soft translucent white with a shadow (like the video's light mode)
+        color: Colors.white.withOpacity(0.6), 
+        borderRadius: BorderRadius.circular(50),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Stack(
+        children: [
+          // 1. The Sliding Liquid Glass Pill
+          AnimatedAlign(
+            // easeOutBack gives that slight liquid/elastic overshoot as it settles
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeOutBack, 
+            alignment: _isAkountMaster ? Alignment.centerRight : Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: 0.5, // Takes up exactly half the track
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(50),
+                child: BackdropFilter(
+                  // The liquid glass blur from the video's dark mode
+                  filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      // The "greyed out" active color from the video's light mode
+                      color: Colors.black.withOpacity(0.07), 
+                      borderRadius: BorderRadius.circular(50),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          
+          // 2. The Text Options
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () async {
+                    setState(() => _isAkountMaster = false);
+                    await _storage.write(key: 'saved_central_db', value: 'false');
+                  },
+                  child: Center(
+                    // Smoothly animates the text weight and color when selected
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 250),
+                      style: TextStyle(
+                        fontFamily: 'Outfit',
+                        color: !_isAkountMaster ? _textMain : _textMuted.withOpacity(0.7),
+                        fontWeight: !_isAkountMaster ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 15,
+                        letterSpacing: -0.2,
+                      ),
+                      child: const Text('Billing'),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () async {
+                    setState(() => _isAkountMaster = true);
+                    await _storage.write(key: 'saved_central_db', value: 'true');
+                  },
+                  child: Center(
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 250),
+                      style: TextStyle(
+                        fontFamily: 'Outfit',
+                        color: _isAkountMaster ? _textMain : _textMuted.withOpacity(0.7),
+                        fontWeight: _isAkountMaster ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 15,
+                        letterSpacing: -0.2,
+                      ),
+                      child: const Text('Akount'),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Borderless, heavily rounded input fields
+  Widget _buildInput({
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String label,
+    required IconData icon,
+    required bool obscure,
+    bool isPassword = false,
+  }) {
+    final isFocused = focusNode.hasFocus;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: _inputBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFocused ? _accentColor : Colors.transparent,
+          width: 2,
+        ),
+      ),
+      child: TextFormField(
+        controller: controller,
+        focusNode: focusNode,
+        obscureText: obscure,
+        style: TextStyle(color: _textMain, fontSize: 15),
+        cursorColor: _textMain,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+            color: isFocused ? _textMain : _textMuted,
+            fontSize: 14,
+          ),
+          floatingLabelStyle: TextStyle(
+            color: _textMain,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+          prefixIcon: Icon(
+            icon,
+            color: isFocused ? _textMain : _textMuted,
+            size: 22,
+          ),
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: _textMuted,
+                    size: 22,
+                  ),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                )
+              : null,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
         ),
       ),
     );
   }
 }
-
