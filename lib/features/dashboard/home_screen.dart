@@ -247,4 +247,4 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-class AddNewContentPage extends StatelessWidget { const AddNewContentPage({super.key}); @override Widget build(BuildContext context) => const Center(child: Text('Add New Content')); }
+class AddNewContentPage extends StatelessWidget { const AddNewContentPage({super.key}); @override Widget build(BuildContext context) => const Center(child: Text('Add New Content'));}
