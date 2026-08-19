@@ -470,7 +470,7 @@ class _GlassAddButton extends StatelessWidget {
             ),
             child: AnimatedRotation(
               duration: const Duration(milliseconds: 250),
-              turns: isSelected ? 0.125 : 0,
+              turns: isSelected ? 0.125 :  0,
               child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
             ),
           ),
