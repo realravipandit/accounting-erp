@@ -1,19 +1,19 @@
-﻿import 'package:flutter/material.dart';
-import 'package:sas_akount_login/features/banking/cash_bank_entry_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:sas_akount_login/screens/cash_bank_entry_screen.dart';
 
-import 'package:sas_akount_login/features/sales/sale_screen.dart';
-import 'package:sas_akount_login/features/purchase/purchase_screen.dart';
-import 'package:sas_akount_login/features/receivable/receivable_screen.dart';
-import 'package:sas_akount_login/features/payable/payable_screen.dart';
-import 'package:sas_akount_login/features/reports/outstanding_screen.dart';
-import 'package:sas_akount_login/features/reports/ageing_screen.dart';
-import 'package:sas_akount_login/features/company/company_selection_screen.dart';
-import 'package:sas_akount_login/features/ledger/ledger_master_screen.dart';
-import 'package:sas_akount_login/features/inventory/item_master_screen.dart';
-import 'package:sas_akount_login/features/sales/sales_entry_screen.dart';
-import 'package:sas_akount_login/features/purchase/purchase_entry_screen.dart';
-import 'package:sas_akount_login/features/sales/sales_order_entry_screen.dart';
-import 'package:sas_akount_login/features/ledger/ledger_report_screen.dart';
+import 'package:sas_akount_login/screens/sale_screen.dart';
+import 'package:sas_akount_login/screens/purchase/purchase_screen.dart';
+import 'package:sas_akount_login/screens/receivable_screen.dart';
+import 'package:sas_akount_login/screens/payable_screen.dart';
+import 'package:sas_akount_login/screens/inventory_screen.dart';
+import 'package:sas_akount_login/screens/outstanding_screen.dart';
+import 'package:sas_akount_login/screens/ageing_screen.dart';
+import 'package:sas_akount_login/screens/company_selection_screen.dart';
+import 'package:sas_akount_login/screens/ledger_master_screen.dart';
+import 'package:sas_akount_login/screens/item_master_screen.dart';
+import 'package:sas_akount_login/screens/sales_entry_screen.dart'; // Adjust the path to wherever you saved it!
+import 'package:sas_akount_login/screens/purchase_entry_screen.dart';
+// (Or import 'package:your_app_name/screens/purchase_entry_screen.dart'; depending on your setup)
 
 class CustomDrawer extends StatelessWidget {
   const CustomDrawer({super.key});
@@ -42,7 +42,7 @@ class CustomDrawer extends StatelessWidget {
                     fit: BoxFit.contain,
                   ),
                   const Text(
-                    "v1.0.0",
+                    "v3.1.2",
                     style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500),
                   )
                 ],
@@ -130,9 +130,8 @@ class CustomDrawer extends StatelessWidget {
                     iconBgColor: Colors.green.shade50,
                     iconColor: Colors.green.shade700,
                     items: [
-                      {'title': 'Sales Order Entry', 'page': const SalesOrderEntryScreen()},
-                      {'title': 'Sales Entry', 'page': const SalesEntryScreen()},
                       {'title': 'Sales Invoice', 'page': const SaleScreen()},
+                      {'title': 'Sales Entry', 'page': const SalesEntryScreen()},
                       {'title': 'Customer List', 'page': const ReceivableScreen()},
                     ],
                   ),
@@ -185,7 +184,7 @@ class CustomDrawer extends StatelessWidget {
                     items: [
                       {'title': 'Receivables', 'page': const ReceivableScreen()},
                       {'title': 'Payables', 'page': const PayableScreen()},
-                      {'title': 'Ledger Report', 'page': const LedgerReportPage()},
+                      {'title': 'Stock Ledger', 'page': const InventoryScreen()},
                       {'title': 'Customer Outstanding', 'page': const OutstandingScreen(), 'badge': 'NEW'},
                       {'title': 'Customer Ageing', 'page': const AgeingScreen()},
                     ],

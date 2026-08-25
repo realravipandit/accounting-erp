@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:ui'; // Required for ImageFilter.blur in the liquid toggle
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Required for AnnotatedRegion & SystemUIOverlayStyle
+import 'package:http/http.dart' as http;
 import 'package:sas_akount_login/services/auth/auth_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sas_akount_login/core/database/db_helper.dart';
@@ -8,6 +12,8 @@ import 'register_screen.dart';
 import 'package:sas_akount_login/features/company/company_selection_screen.dart';
 
 final _storage = const FlutterSecureStorage();
+
+enum _ConnState { idle, checking, ok, failed }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,8 +25,12 @@ class LoginScreen extends StatefulWidget {
 class LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _serverController = TextEditingController();
+
   final FocusNode _usernameFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
+  final FocusNode _serverFocus = FocusNode();
+
   final DBHelper _dbHelper = DBHelper();
   final AuthService _apiService = AuthService();
 
@@ -29,29 +39,43 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
   bool _rememberMe = false;
   bool _isAkountMaster = false;
 
+  // --- Server address state ---
+  _ConnState _serverState = _ConnState.idle;
+  String? _lastKnownGoodServer;
+  bool _showServerSuggestion = false;
+  Timer? _debounce;
+
+  static const _kActiveServerKey = 'active_server_address';
+  static const _kLastGoodServerKey = 'last_known_good_server';
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
   // --- Theme Colors: Sunrise Vibe ---
-  final Color _cardBg = const Color(0xFFF9F5EC); 
-  final Color _inputBg = const Color(0xFFE8E2D2); 
-  final Color _btnBg = const Color(0xFFE3DCC8); 
-  final Color _textMain = const Color(0xFF1A1B1C); 
-  final Color _textMuted = const Color(0xFF6B6A66); 
-  final Color _accentColor = const Color(0xFF9BBDE2); 
+  final Color _cardBg = const Color(0xFFF9F5EC);
+  final Color _inputBg = const Color(0xFFE8E2D2);
+  final Color _btnBg = const Color(0xFFE3DCC8);
+  final Color _textMain = const Color(0xFF1A1B1C);
+  final Color _textMuted = const Color(0xFF6B6A66);
+  final Color _accentColor = const Color(0xFF9BBDE2);
+  final Color _successColor = const Color(0xFF4CAF7D);
+  final Color _errorColor = const Color(0xFFE11D48);
 
   @override
   void initState() {
     super.initState();
     _loadSavedData();
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
+
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.04),
       end: Offset.zero,
@@ -61,6 +85,14 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
 
     _usernameFocus.addListener(() => setState(() {}));
     _passwordFocus.addListener(() => setState(() {}));
+    _serverFocus.addListener(() {
+      setState(() {
+        _showServerSuggestion = _serverFocus.hasFocus &&
+            _lastKnownGoodServer != null &&
+            _serverController.text.trim().isEmpty;
+      });
+    });
+
     _animationController.forward();
   }
 
@@ -77,17 +109,103 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
         });
       }
     }
+
     final savedDbMode = await _storage.read(key: 'saved_central_db');
     if (savedDbMode != null && mounted) {
       setState(() {
         _isAkountMaster = savedDbMode == 'true';
       });
     }
+
+    // Server address: load active (if any) into the field,
+    // and the last-known-good separately for the suggestion chip.
+    final activeServer = await _storage.read(key: _kActiveServerKey);
+    final lastGood = await _storage.read(key: _kLastGoodServerKey);
+
+    if (mounted) {
+      setState(() {
+        if (activeServer != null && activeServer.isNotEmpty) {
+          _serverController.text = activeServer;
+        }
+        _lastKnownGoodServer = lastGood;
+      });
+
+      // If we already have an address from a previous session, verify it
+      // silently in the background so the chip reflects reality on open.
+      if (_serverController.text.trim().isNotEmpty) {
+        _checkServer(_serverController.text, silent: true);
+      }
+    }
+  }
+
+  String _normalizeServerAddress(String input) {
+    var addr = input.trim();
+    if (!addr.startsWith('http://') && !addr.startsWith('https://')) {
+      addr = 'http://$addr';
+    }
+    if (addr.endsWith('/')) addr = addr.substring(0, addr.length - 1);
+    return addr;
+  }
+
+  Future<void> _checkServer(String rawInput, {bool silent = false}) async {
+    if (rawInput.trim().isEmpty) {
+      setState(() => _serverState = _ConnState.idle);
+      return;
+    }
+
+    if (!silent) {
+      setState(() => _serverState = _ConnState.checking);
+    }
+
+    final baseUrl = _normalizeServerAddress(rawInput);
+
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/health'))
+          .timeout(const Duration(seconds: 3));
+
+      if (!mounted) return;
+
+      bool ok = false;
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        ok = body['status'] == 'ok';
+      }
+
+      setState(() => _serverState = ok ? _ConnState.ok : _ConnState.failed);
+
+      if (ok) {
+        await _storage.write(key: _kActiveServerKey, value: baseUrl);
+        await _storage.write(key: _kLastGoodServerKey, value: baseUrl);
+        _lastKnownGoodServer = baseUrl;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _serverState = _ConnState.failed);
+      debugPrint('Server health check failed: $e');
+    }
+  }
+
+  void _onServerChanged(String value) {
+    setState(() => _showServerSuggestion = false);
+    _debounce?.cancel();
+    setState(() => _serverState = _ConnState.idle);
+    _debounce = Timer(const Duration(milliseconds: 700), () {
+      _checkServer(value);
+    });
+  }
+
+  void _applySuggestion() {
+    if (_lastKnownGoodServer == null) return;
+    _serverController.text = _lastKnownGoodServer!;
+    setState(() => _showServerSuggestion = false);
+    _checkServer(_lastKnownGoodServer!);
   }
 
   void _login() async {
     FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
+
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
 
@@ -96,10 +214,23 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
       _showSnack('Please fill in both username and password', isError: true);
       return;
     }
+
+    if (_serverController.text.trim().isEmpty) {
+      setState(() => _isLoading = false);
+      _showSnack('Please enter a server address', isError: true);
+      return;
+    }
+
+    // Make sure whatever's in the field right now is saved as active,
+    // even if the debounce hasn't fired yet (e.g. fast typers).
+    final baseUrl = _normalizeServerAddress(_serverController.text);
+    await _storage.write(key: _kActiveServerKey, value: baseUrl);
+
     final targetDb = _isAkountMaster ? 'SmAkountMaster' : 'SASBillingMaster';
 
     try {
       final isAuthenticated = await _apiService.login(username, password, targetDb);
+
       if (!mounted) return;
 
       if (isAuthenticated) {
@@ -112,6 +243,9 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
           await _storage.delete(key: 'saved_password');
           await _storage.write(key: 'remember_me', value: 'false');
         }
+
+        await _storage.write(key: _kLastGoodServerKey, value: baseUrl);
+
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(
@@ -147,41 +281,41 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _animationController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _serverController.dispose();
     _usernameFocus.dispose();
     _passwordFocus.dispose();
+    _serverFocus.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // AnnotatedRegion explicitly tells the system to keep the gesture bar transparent on this screen
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         systemNavigationBarColor: Colors.transparent,
         systemNavigationBarDividerColor: Colors.transparent,
-        systemNavigationBarIconBrightness: Brightness.dark, 
-        systemNavigationBarContrastEnforced: false, // Forces Android to drop the translucent background
+        systemNavigationBarIconBrightness: Brightness.dark,
+        systemNavigationBarContrastEnforced: false,
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.dark,
         systemStatusBarContrastEnforced: false,
       ),
       child: Scaffold(
-        // extendBody is crucial: it forces the background to draw UNDER the transparent gesture bar
         extendBody: true,
         extendBodyBehindAppBar: true,
-        
         body: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color(0xFF9BBDE2), // Sky Blue
-                Color(0xFFD4E2DF), // Muted Transition
-                Color(0xFFF6E6CD), // Peach/Cream
+                Color(0xFF9BBDE2),
+                Color(0xFFD4E2DF),
+                Color(0xFFF6E6CD),
               ],
               stops: [0.0, 0.45, 1.0],
             ),
@@ -197,19 +331,16 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Liquid Toggle
                         _buildToggle(),
-                        const SizedBox(height: 40),
-                        
-                        // Main Card
+                        const SizedBox(height: 36),
                         Container(
-                          padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
+                          padding: const EdgeInsets.fromLTRB(28, 36, 28, 36),
                           decoration: BoxDecoration(
                             color: _cardBg,
-                            borderRadius: BorderRadius.circular(32),
+                            borderRadius: BorderRadius.circular(28),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 40,
                                 offset: const Offset(0, 10),
                               )
@@ -218,45 +349,48 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              // Logo
                               Center(
                                 child: Hero(
                                   tag: 'app_logo_animation',
                                   child: Image.asset(
                                     'assets/images/logo.png',
-                                    height: 48,
+                                    height: 44,
                                     errorBuilder: (_, __, ___) => Icon(
                                       Icons.layers_rounded,
-                                      size: 48,
+                                      size: 44,
                                       color: _textMain,
                                     ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 28),
+                              const SizedBox(height: 22),
                               Text(
                                 'Sign in to SAS',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  fontSize: 28,
+                                  fontSize: 26,
                                   fontWeight: FontWeight.w600,
                                   color: _textMain,
                                   letterSpacing: -0.5,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               Text(
                                 'Welcome back to your workspace',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  fontSize: 15,
+                                  fontSize: 14,
                                   color: _textMuted,
                                   fontWeight: FontWeight.w400,
                                 ),
                               ),
-                              const SizedBox(height: 36),
-                              
-                              // Username Input
+                              const SizedBox(height: 28),
+
+                              // --- Server address field ---
+                              _buildServerInput(),
+                              if (_showServerSuggestion) _buildServerSuggestion(),
+                              const SizedBox(height: 12),
+
                               _buildInput(
                                 controller: _usernameController,
                                 focusNode: _usernameFocus,
@@ -264,9 +398,7 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                 icon: Icons.person_outline_rounded,
                                 obscure: false,
                               ),
-                              const SizedBox(height: 16),
-                              
-                              // Password Input
+                              const SizedBox(height: 12),
                               _buildInput(
                                 controller: _passwordController,
                                 focusNode: _passwordFocus,
@@ -275,9 +407,8 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                 obscure: _obscurePassword,
                                 isPassword: true,
                               ),
-                              const SizedBox(height: 20),
-                              
-                              // Remember + Forgot Password
+                              const SizedBox(height: 18),
+
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
@@ -286,24 +417,24 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                     child: Row(
                                       children: [
                                         Container(
-                                          width: 20,
-                                          height: 20,
+                                          width: 18,
+                                          height: 18,
                                           decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(6),
+                                            borderRadius: BorderRadius.circular(5),
                                             border: Border.all(
-                                              color: _rememberMe ? _accentColor : _textMuted.withOpacity(0.5),
+                                              color: _rememberMe ? _accentColor : _textMuted.withValues(alpha: 0.5),
                                               width: 1.5,
                                             ),
                                             color: _rememberMe ? _accentColor : Colors.transparent,
                                           ),
                                           child: _rememberMe
-                                              ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                              ? const Icon(Icons.check, size: 13, color: Colors.white)
                                               : null,
                                         ),
-                                        const SizedBox(width: 10),
+                                        const SizedBox(width: 9),
                                         Text(
                                           'Remember me',
-                                          style: TextStyle(color: _textMuted, fontSize: 14),
+                                          style: TextStyle(color: _textMuted, fontSize: 13.5),
                                         ),
                                       ],
                                     ),
@@ -314,33 +445,32 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                       'Forgot password?',
                                       style: TextStyle(
                                         color: _textMain,
-                                        fontSize: 14,
+                                        fontSize: 13.5,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 36),
-                              
-                              // Sign In Button
+                              const SizedBox(height: 30),
+
                               SizedBox(
-                                height: 54,
+                                height: 52,
                                 child: ElevatedButton(
                                   onPressed: _isLoading ? null : _login,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: _btnBg,
                                     foregroundColor: _textMain,
-                                    disabledBackgroundColor: _btnBg.withOpacity(0.5),
+                                    disabledBackgroundColor: _btnBg.withValues(alpha: 0.5),
                                     elevation: 0,
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(50), 
+                                      borderRadius: BorderRadius.circular(50),
                                     ),
                                   ),
                                   child: _isLoading
                                       ? const SizedBox(
-                                          width: 24,
-                                          height: 24,
+                                          width: 22,
+                                          height: 22,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2.5,
                                             color: Colors.black87,
@@ -358,15 +488,14 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                             ],
                           ),
                         ),
-                        const SizedBox(height: 32),
-                        
-                        // Create account
+                        const SizedBox(height: 28),
+
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               "Don't have an account? ",
-                              style: TextStyle(color: _textMain.withOpacity(0.7), fontSize: 14),
+                              style: TextStyle(color: _textMain.withValues(alpha: 0.7), fontSize: 14),
                             ),
                             GestureDetector(
                               onTap: () {
@@ -386,12 +515,13 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
+
                         Text(
                           'By signing in, you agree to our Terms of Service\nand Privacy Policy.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: _textMain.withOpacity(0.5),
+                            color: _textMain.withValues(alpha: 0.5),
                             fontSize: 12,
                             height: 1.5,
                           ),
@@ -408,20 +538,109 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     );
   }
 
-  // Liquid Glass Elastic Toggle Switch
+  // --- Compact server address field, styled to match _buildInput ---
+  Widget _buildServerInput() {
+    final isFocused = _serverFocus.hasFocus;
+
+    Widget? statusIcon;
+    switch (_serverState) {
+      case _ConnState.checking:
+        statusIcon = SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(strokeWidth: 2, color: _textMuted),
+        );
+        break;
+      case _ConnState.ok:
+        statusIcon = Icon(Icons.check_circle_rounded, color: _successColor, size: 18);
+        break;
+      case _ConnState.failed:
+        statusIcon = Icon(Icons.error_rounded, color: _errorColor, size: 18);
+        break;
+      case _ConnState.idle:
+        statusIcon = null;
+        break;
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      decoration: BoxDecoration(
+        color: isFocused ? _inputBg.withValues(alpha: 0.9) : _inputBg.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isFocused ? _accentColor : Colors.transparent,
+          width: 1.4,
+        ),
+      ),
+      child: TextFormField(
+        controller: _serverController,
+        focusNode: _serverFocus,
+        style: TextStyle(color: _textMain, fontSize: 14.5),
+        cursorColor: _accentColor,
+        cursorHeight: 18,
+        keyboardType: TextInputType.url,
+        onChanged: _onServerChanged,
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: 'Server address',
+          hintStyle: TextStyle(color: _textMuted, fontSize: 14),
+          prefixIcon: Icon(
+            Icons.dns_rounded,
+            color: isFocused ? _textMain : _textMuted,
+            size: 19,
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 20),
+          suffixIcon: statusIcon == null
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Center(widthFactor: 1, child: statusIcon),
+                ),
+          suffixIconConstraints: const BoxConstraints(minWidth: 30, minHeight: 20),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServerSuggestion() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, left: 4),
+      child: GestureDetector(
+        onTap: _applySuggestion,
+        behavior: HitTestBehavior.opaque,
+        child: Row(
+          children: [
+            Icon(Icons.history_rounded, size: 14, color: _textMuted),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                _lastKnownGoodServer!,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: _textMuted, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // Liquid Glass Elastic Toggle Switch
   Widget _buildToggle() {
     return Container(
-      height: 56, // Matched to the video's proportions
+      height: 56,
       width: 280,
-      padding: const EdgeInsets.all(6), // Inner padding creates the track effect
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        // The track: Soft translucent white with a shadow (like the video's light mode)
-        color: Colors.white.withOpacity(0.6), 
+        color: Colors.white.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(50),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 16,
             offset: const Offset(0, 4),
           )
@@ -429,23 +648,19 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
       ),
       child: Stack(
         children: [
-          // 1. The Sliding Liquid Glass Pill
           AnimatedAlign(
-            // easeOutBack gives that slight liquid/elastic overshoot as it settles
             duration: const Duration(milliseconds: 450),
-            curve: Curves.easeOutBack, 
+            curve: Curves.easeOutBack,
             alignment: _isAkountMaster ? Alignment.centerRight : Alignment.centerLeft,
             child: FractionallySizedBox(
-              widthFactor: 0.5, // Takes up exactly half the track
+              widthFactor: 0.5,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(50),
                 child: BackdropFilter(
-                  // The liquid glass blur from the video's dark mode
                   filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
                   child: Container(
                     decoration: BoxDecoration(
-                      // The "greyed out" active color from the video's light mode
-                      color: Colors.black.withOpacity(0.07), 
+                      color: Colors.black.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(50),
                     ),
                   ),
@@ -453,8 +668,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
               ),
             ),
           ),
-          
-          // 2. The Text Options
           Row(
             children: [
               Expanded(
@@ -465,12 +678,11 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                     await _storage.write(key: 'saved_central_db', value: 'false');
                   },
                   child: Center(
-                    // Smoothly animates the text weight and color when selected
                     child: AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 250),
                       style: TextStyle(
                         fontFamily: 'Outfit',
-                        color: !_isAkountMaster ? _textMain : _textMuted.withOpacity(0.7),
+                        color: !_isAkountMaster ? _textMain : _textMuted.withValues(alpha: 0.7),
                         fontWeight: !_isAkountMaster ? FontWeight.w700 : FontWeight.w500,
                         fontSize: 15,
                         letterSpacing: -0.2,
@@ -492,7 +704,7 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                       duration: const Duration(milliseconds: 250),
                       style: TextStyle(
                         fontFamily: 'Outfit',
-                        color: _isAkountMaster ? _textMain : _textMuted.withOpacity(0.7),
+                        color: _isAkountMaster ? _textMain : _textMuted.withValues(alpha: 0.7),
                         fontWeight: _isAkountMaster ? FontWeight.w700 : FontWeight.w500,
                         fontSize: 15,
                         letterSpacing: -0.2,
@@ -509,7 +721,7 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     );
   }
 
-  // Borderless, heavily rounded input fields
+  // --- Compact, sleek input field ---
   Widget _buildInput({
     required TextEditingController controller,
     required FocusNode focusNode,
@@ -519,49 +731,46 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     bool isPassword = false,
   }) {
     final isFocused = focusNode.hasFocus;
-    
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
       decoration: BoxDecoration(
-        color: _inputBg,
-        borderRadius: BorderRadius.circular(16),
+        color: isFocused ? _inputBg.withValues(alpha: 0.9) : _inputBg.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isFocused ? _accentColor : Colors.transparent,
-          width: 2,
+          width: 1.4,
         ),
       ),
       child: TextFormField(
         controller: controller,
         focusNode: focusNode,
         obscureText: obscure,
-        style: TextStyle(color: _textMain, fontSize: 15),
-        cursorColor: _textMain,
+        style: TextStyle(color: _textMain, fontSize: 14.5),
+        cursorColor: _accentColor,
+        cursorHeight: 18,
         decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(
-            color: isFocused ? _textMain : _textMuted,
-            fontSize: 14,
-          ),
-          floatingLabelStyle: TextStyle(
-            color: _textMain,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+          isDense: true,
+          hintText: label,
+          hintStyle: TextStyle(color: _textMuted, fontSize: 14),
           prefixIcon: Icon(
             icon,
             color: isFocused ? _textMain : _textMuted,
-            size: 22,
+            size: 19,
           ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 20),
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
                     _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                     color: _textMuted,
-                    size: 22,
+                    size: 19,
                   ),
                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 20),
                 )
               : null,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,

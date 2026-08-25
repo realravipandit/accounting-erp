@@ -190,7 +190,7 @@ class _DashboardPageState extends State<DashboardPage> {
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(color: c.withOpacity(0.04), borderRadius: BorderRadius.circular(20), border: Border.all(color: c.withOpacity(0.15), width: 1.5)),
+        decoration: BoxDecoration(color: c.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(20), border: Border.all(color: c.withValues(alpha: 0.15), width: 1.5)),
         child: child,
       ),
     );
@@ -345,11 +345,11 @@ class _GlassPill extends StatelessWidget {
         child: Container(
           height: 64,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.02),
+            color: Colors.white.withValues(alpha: 0.02),
             borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: Colors.white.withOpacity(0.30), width: 1),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.30), width: 1),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4)),
+              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 12, offset: const Offset(0, 4)),
             ],
           ),
           child: LayoutBuilder(
@@ -369,11 +369,11 @@ class _GlassPill extends StatelessWidget {
                       opacity: selectedPos >= 0 ? 1 : 0,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.30),
+                          color: Colors.white.withValues(alpha: 0.30),
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white.withOpacity(0.45), width: 1),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.45), width: 1),
                           boxShadow: [
-                            BoxShadow(color: Colors.white.withOpacity(0.25), blurRadius: 14, spreadRadius: 1),
+                            BoxShadow(color: Colors.white.withValues(alpha: 0.25), blurRadius: 14, spreadRadius: 1),
                           ],
                         ),
                       ),
@@ -398,7 +398,7 @@ class _GlassPill extends StatelessWidget {
                                   selected ? item.activeIcon : item.icon,
                                   key: ValueKey(selected),
                                   size: 22,
-                                  color: selected ? const Color(0xFF312E81) : const Color(0xFF1F2937).withOpacity(0.75),
+                                  color: selected ? const Color(0xFF312E81) : const Color(0xFF1F2937).withValues(alpha: 0.75),
                                   shadows: const [Shadow(color: Colors.black26, blurRadius: 6)],
                                 ),
                               ),
@@ -410,7 +410,7 @@ class _GlassPill extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 10.5,
                                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                  color: selected ? const Color(0xFF312E81) : const Color(0xFF1F2937).withOpacity(0.75),
+                                  color: selected ? const Color(0xFF312E81) : const Color(0xFF1F2937).withValues(alpha: 0.75),
                                   shadows: const [Shadow(color: Colors.black26, blurRadius: 6)],
                                 ),
                               ),
@@ -454,14 +454,14 @@ class _GlassAddButton extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF4F46E5).withOpacity(isSelected ? 0.38 : 0.24),
-                  const Color(0xFF9333EA).withOpacity(isSelected ? 0.38 : 0.24),
+                  const Color(0xFF4F46E5).withValues(alpha: isSelected ? 0.38 : 0.24),
+                  const Color(0xFF9333EA).withValues(alpha: isSelected ? 0.38 : 0.24),
                 ],
               ),
-              border: Border.all(color: Colors.white.withOpacity(0.4), width: 1),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF4F46E5).withOpacity(isSelected ? 0.22 : 0.12),
+                  color: const Color(0xFF4F46E5).withValues(alpha: isSelected ? 0.22 : 0.12),
                   blurRadius: isSelected ? 16 : 10,
                   spreadRadius: isSelected ? 1 : 0,
                   offset: const Offset(0, 4),

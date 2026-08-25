@@ -5,7 +5,6 @@ import 'package:sas_akount_login/services/auth/auth_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sas_akount_login/features/dashboard/home_screen.dart';
 import 'package:sas_akount_login/features/auth/login_screen.dart';
-import 'package:sas_akount_login/services/dashboard/dashboard_service.dart';
 
 // --- Sunrise Theme Colors ---
 class SunriseTheme {
@@ -180,7 +179,7 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
             height: 48,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.white.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(50),
             ),
             child: Image.asset(
@@ -198,7 +197,7 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
             tooltip: 'Refresh companies',
             icon: Icon(
               Icons.refresh_rounded,
-              color: SunriseTheme.textMain.withOpacity(0.7),
+              color: SunriseTheme.textMain.withValues(alpha: 0.7),
             ),
           ),
           IconButton(
@@ -247,7 +246,7 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
                 : '${_companies.length} workspace${_companies.length == 1 ? '' : 's'} available for you',
             style: TextStyle(
               fontSize: 14,
-              color: SunriseTheme.textMain.withOpacity(0.6),
+              color: SunriseTheme.textMain.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -299,7 +298,7 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
             borderRadius: BorderRadius.circular(32),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 40,
                 offset: const Offset(0, 10),
               )
@@ -312,7 +311,7 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  color: SunriseTheme.danger.withOpacity(0.1),
+                  color: SunriseTheme.danger.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -372,7 +371,7 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
             borderRadius: BorderRadius.circular(32),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 40,
                 offset: const Offset(0, 10),
               )
@@ -385,7 +384,7 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  color: SunriseTheme.textMain.withOpacity(0.05),
+                  color: SunriseTheme.textMain.withValues(alpha: 0.05),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -429,9 +428,9 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
         child: Container(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.3),
+            color: Colors.white.withValues(alpha: 0.3),
             border: Border(
-              top: BorderSide(color: Colors.white.withOpacity(0.4)),
+              top: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
             ),
           ),
           child: SafeArea(
@@ -472,7 +471,7 @@ class _CompanySelectionScreenState extends State<CompanySelectionScreen> {
                     style: ElevatedButton.styleFrom(
                       elevation: 0,
                       backgroundColor: SunriseTheme.btnBg,
-                      disabledBackgroundColor: SunriseTheme.btnBg.withOpacity(0.5),
+                      disabledBackgroundColor: SunriseTheme.btnBg.withValues(alpha: 0.5),
                       foregroundColor: SunriseTheme.textMain,
                       disabledForegroundColor: SunriseTheme.textMuted,
                       shape: RoundedRectangleBorder(
@@ -536,15 +535,15 @@ class _CompanyCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white.withOpacity(0.6) : SunriseTheme.cardBg.withOpacity(0.8),
+          color: isSelected ? Colors.white.withValues(alpha: 0.6) : SunriseTheme.cardBg.withValues(alpha: 0.8),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isSelected ? SunriseTheme.accent : Colors.white.withOpacity(0.4),
+            color: isSelected ? SunriseTheme.accent : Colors.white.withValues(alpha: 0.4),
             width: isSelected ? 2 : 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isSelected ? 0.08 : 0.02),
+              color: Colors.black.withValues(alpha: isSelected ? 0.08 : 0.02),
               blurRadius: isSelected ? 20 : 10,
               offset: Offset(0, isSelected ? 8 : 4),
             )
@@ -558,7 +557,7 @@ class _CompanyCard extends StatelessWidget {
               height: 48,
               width: 48,
               decoration: BoxDecoration(
-                color: isSelected ? SunriseTheme.accent.withOpacity(0.2) : Colors.black.withOpacity(0.04),
+                color: isSelected ? SunriseTheme.accent.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.04),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -591,7 +590,7 @@ class _CompanyCard extends StatelessWidget {
                     'Code: $code',
                     style: TextStyle(
                       fontSize: 13,
-                      color: SunriseTheme.textMuted.withOpacity(0.8),
+                      color: SunriseTheme.textMuted.withValues(alpha: 0.8),
                     ),
                   ),
                 ],
