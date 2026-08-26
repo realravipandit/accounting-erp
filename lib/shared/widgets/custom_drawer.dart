@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:sas_akount_login/features/banking/cash_bank_entry_screen.dart';
+import 'package:sas_akount_login/features/ledger/stock_ledger_report_screen.dart';
 
 import 'package:sas_akount_login/features/sales/sale_screen.dart';
 import 'package:sas_akount_login/features/purchase/purchase_screen.dart';
@@ -186,6 +187,7 @@ class CustomDrawer extends StatelessWidget {
                       {'title': 'Receivables', 'page': const ReceivableScreen()},
                       {'title': 'Payables', 'page': const PayableScreen()},
                       {'title': 'Ledger Report', 'page': const LedgerReportPage()},
+                      {'title': 'Stock ledger', 'page': const StockLedgerReportPage()},
                       {'title': 'Customer Outstanding', 'page': const OutstandingScreen(), 'badge': 'NEW'},
                       {'title': 'Customer Ageing', 'page': const AgeingScreen()},
                     ],

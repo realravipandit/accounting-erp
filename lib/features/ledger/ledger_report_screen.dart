@@ -58,7 +58,7 @@ class LedgerReportRequest {
 class LedgerRawRow {
   final String partyName;
   final String? partyPan;
-  final DateTime? displayDate;
+  final String? displayDate;
   final String? partyDate;
   final String particular;
   final String? voucherNo;
@@ -92,9 +92,12 @@ class LedgerRawRow {
     return LedgerRawRow(
       partyName: j['PartyName']?.toString() ?? '',
       partyPan: toS(j['PartyPan']),
-      displayDate: (j['DisplayDate'] != null && j['DisplayDate'].toString().isNotEmpty)
-          ? DateTime.tryParse(j['DisplayDate'].toString())
-          : null,
+      // DisplayDate arrives from the backend/SP as an already-formatted
+      // string (dd/MM/yyyy, or the Miti string) — not ISO. DateTime.tryParse()
+      // can't read that format and used to silently return null for every
+      // row, which made every row fall back to the report's fromDate.
+      // Just use the string as-is, same fix as the Stock Ledger report.
+      displayDate: toS(j['DisplayDate']),
       partyDate: toS(j['PartyDate']),
       particular: j['Particular']?.toString() ?? '',
       voucherNo: toS(j['VoucherNo']),
@@ -150,13 +153,16 @@ String _balanceStr(double debit, double credit) {
   return diff > 0 ? '${_fmt(diff)} Dr' : '${_fmt(diff.abs())} Cr';
 }
 
-String _dateStr(DateTime? d, {DateTime? fallbackDate, bool useMiti = false}) {
-  final effective = d ?? fallbackDate;
-  if (effective == null) return '';
+String _dateStr(String? displayDate, {DateTime? fallbackDate, bool useMiti = false}) {
+  // Trust the SP's own formatted string when present. Only fall back to
+  // the report's fromDate for rows the backend intentionally sends with
+  // no date (e.g. opening balance rows).
+  if (displayDate != null && displayDate.isNotEmpty) return displayDate;
+  if (fallbackDate == null) return '';
   if (useMiti) {
-    return NepaliDateTime.fromDateTime(effective).format('dd/MM/yyyy');
+    return NepaliDateTime.fromDateTime(fallbackDate).format('dd/MM/yyyy');
   }
-  return '${effective.day.toString().padLeft(2, '0')}/${effective.month.toString().padLeft(2, '0')}/${effective.year}';
+  return '${fallbackDate.day.toString().padLeft(2, '0')}/${fallbackDate.month.toString().padLeft(2, '0')}/${fallbackDate.year}';
 }
 
 List<Map<String, String>> _parseItems(String xml) {
@@ -294,7 +300,7 @@ class LedgerReportScreen extends StatefulWidget {
 
 class _LedgerReportScreenState extends State<LedgerReportScreen> {
   late Future<List<LedgerDisplayRow>> _future;
-  
+
   // ZOOM & GESTURE STATE
   double _zoom = 1.0;
   double _baseZoom = 1.0;
@@ -351,7 +357,7 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
       doc.addPage(
         pw.MultiPage(
           maxPages: 200,
-          pageFormat: PdfPageFormat.a4, 
+          pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(24),
           build: (pw.Context context) {
             return [
@@ -391,11 +397,11 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
               pw.Table(
                 border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
                 columnWidths: {
-                  0: const pw.FixedColumnWidth(55),  // Date
-                  1: const pw.FlexColumnWidth(),    // Description
-                  2: const pw.FixedColumnWidth(65),  // Debit
-                  3: const pw.FixedColumnWidth(65),  // Credit
-                  4: const pw.FixedColumnWidth(70),  // Balance
+                  0: const pw.FixedColumnWidth(55), // Date
+                  1: const pw.FlexColumnWidth(), // Description
+                  2: const pw.FixedColumnWidth(65), // Debit
+                  3: const pw.FixedColumnWidth(65), // Credit
+                  4: const pw.FixedColumnWidth(70), // Balance
                 },
                 children: [
                   // Table Header Row
@@ -560,7 +566,7 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
                       onPointerUp: (_) => setState(() => _activePointers = (_activePointers - 1).clamp(0, 10)),
                       onPointerCancel: (_) => setState(() => _activePointers = (_activePointers - 1).clamp(0, 10)),
                       child: GestureDetector(
-                        behavior: HitTestBehavior.opaque, 
+                        behavior: HitTestBehavior.opaque,
                         onScaleStart: (details) => _baseZoom = _zoom,
                         onScaleUpdate: (details) {
                           if (_activePointers < 2) return;
@@ -624,16 +630,23 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
       ),
       child: Row(
         children: [
-          _cell('Date', width: wDate, isHeader: true),
-          _cell('Description', width: wDesc, isHeader: true, align: TextAlign.left),
-          _cell('Debit Amount', width: wDebit, isHeader: true, align: TextAlign.right),
-          _cell('Credit Amount', width: wCredit, isHeader: true, align: TextAlign.right),
-          _cell('Balance', width: wBal, isHeader: true, align: TextAlign.right),
+          _cell('Date', width: wDate, isHeader: true, singleLine: true),
+          // Description header stays single-line for a tidy header row even
+          // though the data cells below it are free to wrap.
+          _cell('Description', width: wDesc, isHeader: true, align: TextAlign.left, singleLine: true),
+          _cell('Debit Amount', width: wDebit, isHeader: true, align: TextAlign.right, singleLine: true),
+          _cell('Credit Amount', width: wCredit, isHeader: true, align: TextAlign.right, singleLine: true),
+          _cell('Balance', width: wBal, isHeader: true, align: TextAlign.right, singleLine: true),
         ],
       ),
     );
   }
 
+  /// [singleLine] pins a column to one line and lets long text overflow
+  /// visibly instead of wrapping — used for Date/Debit/Credit/Balance so
+  /// they never wrap unexpectedly at tight zoom levels. Description leaves
+  /// this false so it can grow to as many lines as it needs, with no cap
+  /// and no truncation.
   Widget _cell(
     String text, {
     required double width,
@@ -641,6 +654,7 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
     TextAlign align = TextAlign.center,
     bool isBold = false,
     bool isItalic = false,
+    bool singleLine = false,
   }) {
     return Container(
       width: width,
@@ -655,6 +669,10 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
               : Alignment.centerLeft,
       child: Text(
         text,
+        textAlign: align,
+        maxLines: singleLine ? 1 : null,
+        softWrap: !singleLine,
+        overflow: singleLine ? TextOverflow.visible : TextOverflow.clip,
         style: TextStyle(
           fontSize: 12,
           fontWeight: isHeader || isBold ? FontWeight.bold : FontWeight.normal,
@@ -681,18 +699,24 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
         ),
       ),
       child: Row(
+        // Pin every column to the top of the row so short cells (Date,
+        // Debit, Credit, Balance) don't get vertically centered against a
+        // Description cell that has wrapped to 2+ lines.
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _cell(row.date, width: wDate, isBold: isTotal),
+          _cell(row.date, width: wDate, isBold: isTotal, singleLine: true),
           _cell(
             row.description,
             width: wDesc,
             align: isTotal ? TextAlign.right : TextAlign.left,
             isBold: isHeader || isTotal,
             isItalic: isItem,
+            // singleLine intentionally omitted (defaults to false) — this
+            // is the one column allowed to wrap to as many lines as needed.
           ),
-          _cell(row.debit, width: wDebit, align: TextAlign.right, isBold: isTotal),
-          _cell(row.credit, width: wCredit, align: TextAlign.right, isBold: isTotal),
-          _cell(row.balance, width: wBal, align: TextAlign.right, isBold: isHeader || isTotal),
+          _cell(row.debit, width: wDebit, align: TextAlign.right, isBold: isTotal, singleLine: true),
+          _cell(row.credit, width: wCredit, align: TextAlign.right, isBold: isTotal, singleLine: true),
+          _cell(row.balance, width: wBal, align: TextAlign.right, isBold: isHeader || isTotal, singleLine: true),
         ],
       ),
     );
