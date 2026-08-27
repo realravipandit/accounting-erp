@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:sas_akount_login/services/receivable/receivable_service.dart';
 import 'package:sas_akount_login/models/receivable/ageing.dart';
 import 'package:sas_akount_login/core/services/pdf_service.dart';
@@ -15,6 +16,17 @@ class _AgeingScreenState extends State<AgeingScreen> {
   final _apiService = ReceivableService();
   final Color _themeColor = const Color(0xFFA855F7); // Purple Theme
 
+  // ---- OLD-SOFTWARE-PARITY FILTER STATE ----
+  // Mirrors @BillorDue from Sp_SMCustomerAgeing.
+  String _dateBasis = 'bill'; // 'bill' | 'due'
+  // Mirrors the SP's 3rd date param -- ageing "as of" a chosen date.
+  DateTime _asOfDate = DateTime.now();
+  // Mirrors @Slab -- old system's configurable bucket width (was hardcoded
+  // to 30 in this screen before).
+  int _slab = 30;
+
+  static const List<int> _slabOptions = [15, 30, 45, 60];
+
   @override
   void initState() {
     super.initState();
@@ -22,22 +34,41 @@ class _AgeingScreenState extends State<AgeingScreen> {
   }
 
   void _loadData() {
-  setState(() {
-    _futureData = _apiService.fetchAgeing().then((response) {
-      final records = response['records'];
-
-      if (records is! List) {
-        return <AgeingAccount>[];
-      }
-
-      return records.map((item) {
-        return AgeingAccount.fromMap(
-          Map<String, dynamic>.from(item as Map),
-        );
-      }).toList();
+    setState(() {
+      // NOTE: fetchAgeing needs to accept these params and forward them as
+      // query params to GET /ageing -- see receivable_service_additions.dart
+      _futureData = _apiService
+          .fetchAgeing(
+        dateBasis: _dateBasis,
+        asOfDate: _asOfDate,
+        slab: _slab,
+      )
+          .then((response) {
+        final records = response['records'];
+        if (records is! List) {
+          return <AgeingAccount>[];
+        }
+        return records.map((item) {
+          return AgeingAccount.fromMap(
+            Map<String, dynamic>.from(item as Map),
+          );
+        }).toList();
+      });
     });
-  });
-}
+  }
+
+  Future<void> _pickAsOfDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _asOfDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() => _asOfDate = picked);
+      _loadData();
+    }
+  }
 
   void _showDetails(BuildContext context, AgeingAccount item) {
     showModalBottomSheet(
@@ -45,8 +76,133 @@ class _AgeingScreenState extends State<AgeingScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return AgeingDetailsSheet(item: item, themeColor: _themeColor);
+        return AgeingDetailsSheet(item: item, themeColor: _themeColor, slab: _slab);
       },
+    );
+  }
+
+  // ---- NEW: filter bar restoring old software's Bill/Due toggle, as-of
+  // date and configurable slab ----
+  Widget _buildFilterBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: const Color(0xFFE7E9ED)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: Row(
+                    children: [
+                      Expanded(child: _basisChip('Bill Date', 'bill')),
+                      Expanded(child: _basisChip('Due Date', 'due')),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              InkWell(
+                onTap: _pickAsOfDate,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: const Color(0xFFE7E9ED)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.event_rounded, size: 16, color: Color(0xFF8A8F9A)),
+                      const SizedBox(width: 6),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(_asOfDate),
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E2025)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Text('Slab:', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+              const SizedBox(width: 8),
+              ..._slabOptions.map((s) => Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: _slabChip(s),
+                  )),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _basisChip(String label, String value) {
+    final selected = _dateBasis == value;
+    return InkWell(
+      onTap: () {
+        if (_dateBasis != value) {
+          setState(() => _dateBasis = value);
+          _loadData();
+        }
+      },
+      borderRadius: BorderRadius.circular(7),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF15171C) : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : const Color(0xFF8A8F9A),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _slabChip(int value) {
+    final selected = _slab == value;
+    return InkWell(
+      onTap: () {
+        if (_slab != value) {
+          setState(() => _slab = value);
+          _loadData();
+        }
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? _themeColor.withValues(alpha: 0.15) : Colors.white,
+          border: Border.all(color: selected ? _themeColor : const Color(0xFFE7E9ED)),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          '${value}d',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: selected ? _themeColor : const Color(0xFF6B7280),
+          ),
+        ),
+      ),
     );
   }
 
@@ -145,10 +301,10 @@ class _AgeingScreenState extends State<AgeingScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _bucketBadge('0-30d', item.bucket0_30 ?? 0),
-                    _bucketBadge('31-60d', item.bucket31_60 ?? 0),
-                    _bucketBadge('61-90d', item.bucket61_90 ?? 0),
-                    _bucketBadge('90+d', item.bucket90_plus ?? 0, isDanger: true),
+                    _bucketBadge('0-${_slab}d', item.bucket0_30 ?? 0),
+                    _bucketBadge('${_slab + 1}-${_slab * 2}d', item.bucket31_60 ?? 0),
+                    _bucketBadge('${_slab * 2 + 1}-${_slab * 3}d', item.bucket61_90 ?? 0),
+                    _bucketBadge('${_slab * 3}+d', item.bucket90_plus ?? 0, isDanger: true),
                   ],
                 ),
               ],
@@ -243,32 +399,38 @@ class _AgeingScreenState extends State<AgeingScreen> {
             ],
           ),
         ),
-        body: FutureBuilder<List<AgeingAccount>>(
-          future: _futureData,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return Center(child: CircularProgressIndicator(color: _themeColor));
-            }
-            if (snap.hasError) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Text('Error Loading Data: ${snap.error}', textAlign: TextAlign.center),
-                ),
-              );
-            }
-
-            final allItems = snap.data ?? [];
-            final customers = allItems.where((e) => e.type?.toLowerCase() == 'customer').toList();
-            final vendors = allItems.where((e) => e.type?.toLowerCase() == 'vendor').toList();
-
-            return TabBarView(
-              children: [
-                _buildTabList(customers, 'customers'),
-                _buildTabList(vendors, 'vendors'),
-              ],
-            );
-          },
+        body: Column(
+          children: [
+            // --- NEW: BILL/DUE DATE, AS-OF-DATE, SLAB FILTER BAR ---
+            _buildFilterBar(),
+            Expanded(
+              child: FutureBuilder<List<AgeingAccount>>(
+                future: _futureData,
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator(color: _themeColor));
+                  }
+                  if (snap.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Text('Error Loading Data: ${snap.error}', textAlign: TextAlign.center),
+                      ),
+                    );
+                  }
+                  final allItems = snap.data ?? [];
+                  final customers = allItems.where((e) => e.type?.toLowerCase() == 'customer').toList();
+                  final vendors = allItems.where((e) => e.type?.toLowerCase() == 'vendor').toList();
+                  return TabBarView(
+                    children: [
+                      _buildTabList(customers, 'customers'),
+                      _buildTabList(vendors, 'vendors'),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -278,8 +440,14 @@ class _AgeingScreenState extends State<AgeingScreen> {
 class AgeingDetailsSheet extends StatelessWidget {
   final AgeingAccount item;
   final Color themeColor;
+  final int slab;
 
-  const AgeingDetailsSheet({super.key, required this.item, required this.themeColor});
+  const AgeingDetailsSheet({
+    super.key,
+    required this.item,
+    required this.themeColor,
+    this.slab = 30,
+  });
 
   @override
   Widget build(BuildContext context) {

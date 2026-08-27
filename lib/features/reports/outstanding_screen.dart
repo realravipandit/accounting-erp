@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:sas_akount_login/services/receivable/receivable_service.dart';
 import 'package:sas_akount_login/models/receivable/outstanding.dart';
 import 'package:sas_akount_login/features/reports/outstanding_details_sheet.dart';
@@ -27,10 +28,19 @@ class OutstandingScreen extends StatefulWidget {
 class _OutstandingScreenState extends State<OutstandingScreen> {
   late Future<List<Outstanding>> _futureData;
   final _apiService = ReceivableService();
-
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _query = '';
+
+  // ---- OLD-SOFTWARE-PARITY FILTER STATE ----
+  // Mirrors rdoBillDate.Checked from the old C# screen: report can be run
+  // by invoice (bill) date or by due date.
+  String _dateBasis = 'bill'; // 'bill' | 'due'
+  // Mirrors the old SP's 3rd date param -- lets the user pull outstanding
+  // "as of" any date, not just today.
+  DateTime _asOfDate = DateTime.now();
+  DateTime? _fromDate;
+  DateTime? _toDate;
 
   @override
   void initState() {
@@ -51,7 +61,16 @@ class _OutstandingScreenState extends State<OutstandingScreen> {
 
   void _loadData() {
     setState(() {
-      _futureData = _apiService.fetchOutstanding().then((response) {
+      // NOTE: fetchOutstanding needs to accept these params and forward them
+      // as query params to GET /outstanding -- see receivable_service_additions.dart
+      _futureData = _apiService
+          .fetchOutstanding(
+        dateBasis: _dateBasis,
+        asOfDate: _asOfDate,
+        fromDate: _fromDate,
+        toDate: _toDate ?? _asOfDate,
+      )
+          .then((response) {
         final records = response['records'];
         if (records is! List) {
           return <Outstanding>[];
@@ -61,6 +80,19 @@ class _OutstandingScreenState extends State<OutstandingScreen> {
         }).toList();
       });
     });
+  }
+
+  Future<void> _pickAsOfDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _asOfDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() => _asOfDate = picked);
+      _loadData();
+    }
   }
 
   void _showOutstandingDetails(BuildContext context, Outstanding item, bool isCust) {
@@ -87,6 +119,86 @@ class _OutstandingScreenState extends State<OutstandingScreen> {
       final id = (i.id ?? '').toLowerCase();
       return name.contains(_query) || id.contains(_query);
     }).toList();
+  }
+
+  // ---- NEW: filter bar restoring old software's Bill/Due toggle + as-of date ----
+  Widget _buildFilterBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: _kCard,
+                border: Border.all(color: _kBorder),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  Expanded(child: _basisChip('Bill Date', 'bill')),
+                  Expanded(child: _basisChip('Due Date', 'due')),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          InkWell(
+            onTap: _pickAsOfDate,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: _kCard,
+                border: Border.all(color: _kBorder),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.event_rounded, size: 16, color: _kMuted),
+                  const SizedBox(width: 6),
+                  Text(
+                    'As of ${DateFormat('dd MMM yyyy').format(_asOfDate)}',
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: _kText),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _basisChip(String label, String value) {
+    final selected = _dateBasis == value;
+    return InkWell(
+      onTap: () {
+        if (_dateBasis != value) {
+          setState(() => _dateBasis = value);
+          _loadData();
+        }
+      },
+      borderRadius: BorderRadius.circular(7),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? _kInk : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : _kMuted,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildSummaryStrip(List<Outstanding> items, bool isCust) {
@@ -193,7 +305,6 @@ class _OutstandingScreenState extends State<OutstandingScreen> {
     }
 
     if (items.isEmpty) {
-      // allItems isn't empty, but the search filtered everything out
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -269,6 +380,9 @@ class _OutstandingScreenState extends State<OutstandingScreen> {
                   ],
                 ),
               ),
+
+              // --- NEW: BILL/DUE DATE + AS-OF-DATE FILTER BAR ---
+              _buildFilterBar(),
 
               // --- ANIMATED SEARCH BAR ---
               Padding(
@@ -393,11 +507,9 @@ class _OutstandingScreenState extends State<OutstandingScreen> {
                         ),
                       );
                     }
-
                     final allItems = snap.data ?? [];
                     final customers = allItems.where((e) => e.type?.toLowerCase() == 'customer').toList();
                     final vendors = allItems.where((e) => e.type?.toLowerCase() == 'vendor').toList();
-
                     return TabBarView(
                       children: [
                         _buildTabList(customers, true),
