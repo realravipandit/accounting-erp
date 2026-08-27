@@ -55,6 +55,49 @@ class LedgerReportRequest {
       };
 }
 
+class CompanyProfile {
+  final String name;
+  final String address;
+  final String phone;
+  final String panVat;
+
+  const CompanyProfile({
+    this.name = 'Company Name',
+    this.address = 'Company Address',
+    this.phone = 'Contact Number',
+    this.panVat = 'PAN/VAT No',
+  });
+
+  static String _str(dynamic val, String fallback) {
+    if (val == null) return fallback;
+    final s = val.toString().trim();
+    return s.isEmpty ? fallback : s;
+  }
+
+  factory CompanyProfile.fromJson(Map<String, dynamic> json) {
+    String getVal(List<String> keys, String fallback) {
+      for (final k in keys) {
+        if (json.containsKey(k) && json[k] != null && json[k].toString().trim().isNotEmpty) {
+          return json[k].toString().trim();
+        }
+        for (final mapKey in json.keys) {
+          if (mapKey.toLowerCase() == k.toLowerCase() && json[mapKey] != null && json[mapKey].toString().trim().isNotEmpty) {
+            return json[mapKey].toString().trim();
+          }
+        }
+      }
+      return fallback;
+    }
+
+    return CompanyProfile(
+      name: getVal(['CompanyName', 'name'], 'Company Name'),
+      address: getVal(['FullAddress', 'Address', 'CompanyAddress'], ''),
+      phone: getVal(['Phone', 'PhoneNo', 'ContactNo'], ''),
+      panVat: getVal(['PanVatNo', 'PanNo', 'VatNo'], ''),
+    );
+  }
+}
+
 class LedgerRawRow {
   final String partyName;
   final String? partyPan;
@@ -89,14 +132,10 @@ class LedgerRawRow {
   factory LedgerRawRow.fromJson(Map<String, dynamic> j) {
     double toD(dynamic v) => v == null ? 0 : double.tryParse(v.toString()) ?? 0;
     String? toS(dynamic v) => v?.toString();
+
     return LedgerRawRow(
       partyName: j['PartyName']?.toString() ?? '',
       partyPan: toS(j['PartyPan']),
-      // DisplayDate arrives from the backend/SP as an already-formatted
-      // string (dd/MM/yyyy, or the Miti string) — not ISO. DateTime.tryParse()
-      // can't read that format and used to silently return null for every
-      // row, which made every row fall back to the report's fromDate.
-      // Just use the string as-is, same fix as the Stock Ledger report.
       displayDate: toS(j['DisplayDate']),
       partyDate: toS(j['PartyDate']),
       particular: j['Particular']?.toString() ?? '',
@@ -154,9 +193,6 @@ String _balanceStr(double debit, double credit) {
 }
 
 String _dateStr(String? displayDate, {DateTime? fallbackDate, bool useMiti = false}) {
-  // Trust the SP's own formatted string when present. Only fall back to
-  // the report's fromDate for rows the backend intentionally sends with
-  // no date (e.g. opening balance rows).
   if (displayDate != null && displayDate.isNotEmpty) return displayDate;
   if (fallbackDate == null) return '';
   if (useMiti) {
@@ -219,7 +255,6 @@ List<LedgerDisplayRow> buildLedgerReportRows(
             : 'A/c : ${r.partyName}',
       ));
     }
-
     String desc = r.particular;
     if (r.voucherNo != null && r.voucherNo!.isNotEmpty) {
       desc += '  # : ${r.voucherNo}';
@@ -227,7 +262,6 @@ List<LedgerDisplayRow> buildLedgerReportRows(
         desc += '  PartyVoucher : ${r.partyVoucher} PartyDate : ${r.partyDate ?? ''}';
       }
     }
-
     if (r.debitAmount > 0) {
       partyDebit += r.debitAmount;
       totalDebit += r.debitAmount;
@@ -236,7 +270,6 @@ List<LedgerDisplayRow> buildLedgerReportRows(
       partyCredit += r.creditAmount;
       totalCredit += r.creditAmount;
     }
-
     result.add(LedgerDisplayRow(
       kind: LedgerRowKind.entry,
       date: _dateStr(r.displayDate, fallbackDate: fallbackDate, useMiti: useMiti),
@@ -247,14 +280,13 @@ List<LedgerDisplayRow> buildLedgerReportRows(
       voucherNo: r.voucherNo,
       source: r.voucherSource,
     ));
-
     final pd = r.productDetailsXml;
     if (pd != null && pd.isNotEmpty && pd != '<ProductDetails></ProductDetails>') {
       for (final item in _parseItems(pd)) {
         result.add(LedgerDisplayRow(
           kind: LedgerRowKind.item,
           description:
-              'Items ->> ${item['Pro']}  ${item['Qty']}${item['Unit']}  ${item['Rate']}  ${item['Amount']}',
+              'Items ->> ${item['Pro']} ${item['Qty']}${item['Unit']} ${item['Rate']} ${item['Amount']}',
         ));
       }
     }
@@ -265,8 +297,8 @@ List<LedgerDisplayRow> buildLedgerReportRows(
       result.add(LedgerDisplayRow(kind: LedgerRowKind.note, description: 'Rem : ${r.remark}'));
     }
   }
-
   closeParty();
+
   if (rows.isNotEmpty) {
     result.add(LedgerDisplayRow(
       kind: LedgerRowKind.grandTotal,
@@ -276,7 +308,6 @@ List<LedgerDisplayRow> buildLedgerReportRows(
       balance: _balanceStr(totalDebit, totalCredit),
     ));
   }
-
   return result;
 }
 
@@ -288,6 +319,7 @@ typedef LedgerFetcher = Future<List<LedgerRawRow>> Function(LedgerReportRequest 
 class LedgerReportScreen extends StatefulWidget {
   final LedgerReportRequest request;
   final LedgerFetcher fetchRows;
+
   const LedgerReportScreen({
     super.key,
     required this.request,
@@ -300,8 +332,9 @@ class LedgerReportScreen extends StatefulWidget {
 
 class _LedgerReportScreenState extends State<LedgerReportScreen> {
   late Future<List<LedgerDisplayRow>> _future;
+  late Future<CompanyProfile> _companyProfileFuture;
+  final ApiService _api = ApiService();
 
-  // ZOOM & GESTURE STATE
   double _zoom = 1.0;
   double _baseZoom = 1.0;
   int _activePointers = 0;
@@ -310,6 +343,7 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
   void initState() {
     super.initState();
     _future = _load();
+    _companyProfileFuture = _fetchCompanyProfile();
   }
 
   Future<List<LedgerDisplayRow>> _load() async {
@@ -321,18 +355,38 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
     );
   }
 
-  void _refresh() => setState(() => _future = _load());
+  Future<CompanyProfile> _fetchCompanyProfile() async {
+    try {
+      // Reusing the existing company profile endpoint backed by companycontroller.js
+      final response = await _api.get('company/profile').timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        var decoded = _api.decodeResponse(response);
+        if (decoded is List && decoded.isNotEmpty) decoded = decoded.first;
+        if (decoded is Map<String, dynamic>) {
+          var data = decoded.containsKey('data') ? decoded['data'] : decoded;
+          return CompanyProfile.fromJson(data as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch company profile: $e');
+    }
+    return const CompanyProfile();
+  }
+
+  void _refresh() => setState(() {
+        _future = _load();
+        _companyProfileFuture = _fetchCompanyProfile();
+      });
+
   void _zoomIn() => setState(() => _zoom = (_zoom + 0.15).clamp(0.5, 3.0));
   void _zoomOut() => setState(() => _zoom = (_zoom - 0.15).clamp(0.5, 3.0));
 
-  // --- Base Grid Column Widths ---
   static const double _wDateBase = 85.0;
   static const double _wDescBase = 270.0;
   static const double _wDebitBase = 95.0;
   static const double _wCreditBase = 95.0;
   static const double _wBalBase = 115.0;
 
-  // Formats Header Date according to English/Miti toggle
   String _formatDate(DateTime d) {
     if (widget.request.useMiti) {
       return NepaliDateTime.fromDateTime(d).format('dd/MM/yyyy');
@@ -340,19 +394,23 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
     return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
   }
 
-  // --- PDF Share Function ---
   Future<void> _sharePdf() async {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => const Center(child: CircularProgressIndicator()),
     );
-
     try {
       final rows = await _future;
+      final company = await _companyProfileFuture;
+
       if (rows.isEmpty) throw Exception("No report data to share");
 
       final doc = pw.Document();
+      final now = DateTime.now();
+      final todayStr = widget.request.useMiti
+          ? NepaliDateTime.fromDateTime(now).format('dd/MM/yyyy')
+          : '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
 
       doc.addPage(
         pw.MultiPage(
@@ -361,50 +419,105 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
           margin: const pw.EdgeInsets.all(24),
           build: (pw.Context context) {
             return [
-              // Header Banner
+              // ==========================================
+              // PDF HEADER: CENTERED COMPANY INFO, THEN 3 COLS
+              // ==========================================
               pw.Container(
                 padding: const pw.EdgeInsets.all(10),
                 decoration: const pw.BoxDecoration(color: PdfColors.cyan100),
                 child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                   children: [
-                    pw.Center(
-                      child: pw.Text(
-                        'Ledger Report',
-                        style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+                    if (company.name.isNotEmpty) ...[
+                      pw.Text(
+                        company.name,
+                        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                        textAlign: pw.TextAlign.center,
                       ),
-                    ),
+                      pw.SizedBox(height: 2),
+                    ],
+                    if (company.address.isNotEmpty) ...[
+                      pw.Text(
+                        company.address,
+                        style: const pw.TextStyle(fontSize: 8.5),
+                        textAlign: pw.TextAlign.center,
+                      ),
+                      pw.SizedBox(height: 1),
+                    ],
+                    if (company.phone.isNotEmpty) ...[
+                      pw.Text(
+                        'Ph: ${company.phone}',
+                        style: const pw.TextStyle(fontSize: 8.5),
+                        textAlign: pw.TextAlign.center,
+                      ),
+                      pw.SizedBox(height: 2),
+                    ],
                     pw.SizedBox(height: 6),
                     pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text(
-                          'From: ${_formatDate(widget.request.fromDate)}  To: ${_formatDate(widget.request.toDate)}',
-                          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+                        pw.Expanded(
+                          flex: 1,
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              if (company.panVat.isNotEmpty) ...[
+                                pw.Text(
+                                  'PAN/VAT No: ${company.panVat}',
+                                  style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                                ),
+                                pw.SizedBox(height: 2),
+                              ],
+                              pw.Text(
+                                'From: ${_formatDate(widget.request.fromDate)}\nTo: ${_formatDate(widget.request.toDate)}',
+                                style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                              ),
+                            ],
+                          ),
                         ),
-                        pw.Text(
-                          widget.request.glCodes.isEmpty ? 'All Ledger' : 'Selected Ledgers',
-                          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+                        pw.Expanded(
+                          flex: 1,
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.center,
+                            children: [
+                              pw.Text(
+                                'Ledger Report',
+                                style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+                                textAlign: pw.TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                        pw.Expanded(
+                          flex: 1,
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.end,
+                            children: [
+                              pw.Text(
+                                'Date: $todayStr',
+                                style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                                textAlign: pw.TextAlign.right,
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
+              // ==========================================
               pw.SizedBox(height: 10),
-
-              // Table
               pw.Table(
                 border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
                 columnWidths: {
-                  0: const pw.FixedColumnWidth(55), // Date
-                  1: const pw.FlexColumnWidth(), // Description
-                  2: const pw.FixedColumnWidth(65), // Debit
-                  3: const pw.FixedColumnWidth(65), // Credit
-                  4: const pw.FixedColumnWidth(70), // Balance
+                  0: const pw.FixedColumnWidth(55),
+                  1: const pw.FlexColumnWidth(),
+                  2: const pw.FixedColumnWidth(65),
+                  3: const pw.FixedColumnWidth(65),
+                  4: const pw.FixedColumnWidth(70),
                 },
                 children: [
-                  // Table Header Row
                   pw.TableRow(
                     decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                     children: [
@@ -415,13 +528,10 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
                       _pdfCell('Balance', isHeader: true, align: pw.TextAlign.right),
                     ],
                   ),
-
-                  // Data Rows
                   ...rows.map((row) {
                     final isHeader = row.kind == LedgerRowKind.partyHeader;
                     final isTotal = row.kind == LedgerRowKind.ledgerTotal || row.kind == LedgerRowKind.grandTotal;
                     final isItem = row.kind == LedgerRowKind.item || row.kind == LedgerRowKind.note;
-
                     return pw.TableRow(
                       decoration: pw.BoxDecoration(
                         color: isHeader || isTotal ? PdfColors.grey100 : PdfColors.white,
@@ -512,14 +622,12 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
             if (rows.isEmpty) {
               return const Center(child: Text('No ledger entries in this period'));
             }
-
             final screenWidth = MediaQuery.of(context).size.width;
             final wDate = _wDateBase * _zoom;
             final wDebit = _wDebitBase * _zoom;
             final wCredit = _wCreditBase * _zoom;
             final wBal = _wBalBase * _zoom;
             final baseTotalWidth = wDate + (_wDescBase * _zoom) + wDebit + wCredit + wBal;
-
             final extraSpace = screenWidth > baseTotalWidth ? (screenWidth - baseTotalWidth) : 0.0;
             final wDesc = (_wDescBase * _zoom) + extraSpace;
             final dynamicTotalWidth = baseTotalWidth + extraSpace;
@@ -530,36 +638,119 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
               ),
               child: Column(
                 children: [
+                  // ==========================================
+                  // APP SCREEN HEADER
+                  // ==========================================
                   Container(
                     color: const Color(0xFF00E5FF),
                     width: double.infinity,
                     padding: EdgeInsets.symmetric(horizontal: 16 * _zoom, vertical: 10 * _zoom),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Center(
-                          child: Text(
-                            'Ledger Report',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-                          ),
-                        ),
-                        SizedBox(height: 6 * _zoom),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'From: ${_formatDate(widget.request.fromDate)} To: ${_formatDate(widget.request.toDate)}',
-                              style: const TextStyle(fontSize: 12.5, color: Colors.black87, fontWeight: FontWeight.w600),
+                    child: FutureBuilder<CompanyProfile>(
+                      future: _companyProfileFuture,
+                      builder: (context, companySnap) {
+                        if (companySnap.connectionState == ConnectionState.waiting) {
+                          return Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8.0 * _zoom),
+                              child: const SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(color: Colors.black54, strokeWidth: 2),
+                              ),
                             ),
-                            Text(
-                              widget.request.glCodes.isEmpty ? 'All Ledger' : 'Selected Ledgers',
-                              style: const TextStyle(fontSize: 12.5, color: Colors.black87, fontWeight: FontWeight.w600),
+                          );
+                        }
+
+                        final company = companySnap.data ?? const CompanyProfile();
+                        final now = DateTime.now();
+                        final todayStr = widget.request.useMiti
+                            ? NepaliDateTime.fromDateTime(now).format('dd/MM/yyyy')
+                            : '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (company.name.isNotEmpty) ...[
+                              Text(
+                                company.name,
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                                textAlign: TextAlign.center,
+                              ),
+                              SizedBox(height: 2 * _zoom),
+                            ],
+                            if (company.address.isNotEmpty) ...[
+                              Text(
+                                company.address,
+                                style: const TextStyle(fontSize: 12, color: Colors.black87),
+                                textAlign: TextAlign.center,
+                              ),
+                              SizedBox(height: 1 * _zoom),
+                            ],
+                            if (company.phone.isNotEmpty) ...[
+                              Text(
+                                'Ph: ${company.phone}',
+                                style: const TextStyle(fontSize: 12, color: Colors.black87),
+                                textAlign: TextAlign.center,
+                              ),
+                              SizedBox(height: 2 * _zoom),
+                            ],
+                            SizedBox(height: 6 * _zoom),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 1,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (company.panVat.isNotEmpty) ...[
+                                        Text(
+                                          'PAN/VAT No: ${company.panVat}',
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
+                                        ),
+                                        SizedBox(height: 2 * _zoom),
+                                      ],
+                                      Text(
+                                        'From: ${_formatDate(widget.request.fromDate)}\nTo: ${_formatDate(widget.request.toDate)}',
+                                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Colors.black87),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Expanded(
+                                  flex: 1,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Ledger Report',
+                                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 1,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        'Date: $todayStr',
+                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
+                                        textAlign: TextAlign.right,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
+                  // ==========================================
                   Expanded(
                     child: Listener(
                       onPointerDown: (_) => setState(() => _activePointers++),
@@ -631,8 +822,6 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
       child: Row(
         children: [
           _cell('Date', width: wDate, isHeader: true, singleLine: true),
-          // Description header stays single-line for a tidy header row even
-          // though the data cells below it are free to wrap.
           _cell('Description', width: wDesc, isHeader: true, align: TextAlign.left, singleLine: true),
           _cell('Debit Amount', width: wDebit, isHeader: true, align: TextAlign.right, singleLine: true),
           _cell('Credit Amount', width: wCredit, isHeader: true, align: TextAlign.right, singleLine: true),
@@ -642,11 +831,6 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
     );
   }
 
-  /// [singleLine] pins a column to one line and lets long text overflow
-  /// visibly instead of wrapping — used for Date/Debit/Credit/Balance so
-  /// they never wrap unexpectedly at tight zoom levels. Description leaves
-  /// this false so it can grow to as many lines as it needs, with no cap
-  /// and no truncation.
   Widget _cell(
     String text, {
     required double width,
@@ -687,7 +871,6 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
     final isHeader = row.kind == LedgerRowKind.partyHeader;
     final isTotal = row.kind == LedgerRowKind.ledgerTotal || row.kind == LedgerRowKind.grandTotal;
     final isItem = row.kind == LedgerRowKind.item || row.kind == LedgerRowKind.note;
-
     Widget rowContent = Container(
       decoration: BoxDecoration(
         color: isHeader || isTotal ? const Color(0xFFFAFAFA) : Colors.white,
@@ -699,9 +882,6 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
         ),
       ),
       child: Row(
-        // Pin every column to the top of the row so short cells (Date,
-        // Debit, Credit, Balance) don't get vertically centered against a
-        // Description cell that has wrapped to 2+ lines.
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _cell(row.date, width: wDate, isBold: isTotal, singleLine: true),
@@ -711,8 +891,6 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
             align: isTotal ? TextAlign.right : TextAlign.left,
             isBold: isHeader || isTotal,
             isItalic: isItem,
-            // singleLine intentionally omitted (defaults to false) — this
-            // is the one column allowed to wrap to as many lines as needed.
           ),
           _cell(row.debit, width: wDebit, align: TextAlign.right, isBold: isTotal, singleLine: true),
           _cell(row.credit, width: wCredit, align: TextAlign.right, isBold: isTotal, singleLine: true),
@@ -720,7 +898,6 @@ class _LedgerReportScreenState extends State<LedgerReportScreen> {
         ],
       ),
     );
-
     if (row.kind == LedgerRowKind.entry && row.voucherNo != null && row.voucherNo!.isNotEmpty) {
       return InkWell(
         onTap: () {},
@@ -747,11 +924,9 @@ class LedgerReportPage extends StatelessWidget {
           const Duration(seconds: 60),
           onTimeout: () => throw Exception('Ledger report request timed out after 60s.'),
         );
-
     if (response.statusCode != 200) {
       throw Exception('Ledger report request failed (${response.statusCode}): ${response.body}');
     }
-
     final decoded = _api.decodeResponse(response);
     final list = decoded is List ? decoded : const [];
     return list.map((j) => LedgerRawRow.fromJson(j as Map<String, dynamic>)).toList();
@@ -795,11 +970,9 @@ class LedgerReportPage extends StatelessWidget {
                   barrierDismissible: false,
                   builder: (ctx) => const Center(child: CircularProgressIndicator()),
                 );
-
                 try {
                   final bankingService = BankingService();
                   final allLedgers = await bankingService.getVoucherLedgers();
-
                   final fetchedLedgers = allLedgers.map((l) {
                     final name = (l['LedgerName'] ?? l['ledgerName'] ?? '').toString();
                     final code = (l['LedgerCode'] ?? l['ledgerCode'] ?? '').toString();
@@ -808,7 +981,6 @@ class LedgerReportPage extends StatelessWidget {
                       shortName: code,
                     );
                   }).toList();
-
                   if (context.mounted) Navigator.pop(context);
                   if (context.mounted) {
                     showLedgerReportFlow(
