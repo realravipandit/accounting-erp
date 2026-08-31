@@ -1,6 +1,8 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // 👉 REQUIRED FOR TRANSPARENT SYSTEM BAR
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -20,30 +22,137 @@ import 'package:sas_akount_login/features/reports/ageing_screen.dart';
 // ============================================================================
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
   @override
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
   int _currentIndex = 0;
   bool _isSyncing = false;
   String _companyName = 'Dashboard';
+
+  // Drives the iOS-style "push back" effect when the Overview filter sheet
+  // is open. Lifted up here (rather than kept in DashboardPage) because the
+  // animation needs to scale the WHOLE screen -- app bar and bottom nav
+  // included -- not just the dashboard content sitting inside the IndexedStack.
+  bool _isOverviewFilterOpen = false;
+
+  // Drives the "quick add" speed-dial menu that pops out of the add button.
+  bool _isAddMenuOpen = false;
+  late final AnimationController _addMenuController;
+
   final _syncService = SyncService();
 
-  final _pages = const [
-    DashboardPage(),
-    ReceivableScreen(),
-    AddNewContentPage(),
-    SaleScreen(),
-    PayableScreen(),
-  ];
+  late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+
+    _addMenuController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
+
+    _pages = [
+      DashboardPage(onFilterSheetOpenChanged: _setOverviewFilterOpen),
+      const ReceivableScreen(),
+      const AddNewContentPage(), // unused now -- add button no longer routes here
+      const SaleScreen(),
+      const PayableScreen(),
+    ];
+
     const FlutterSecureStorage().read(key: 'selected_company_name').then((val) {
       if (val != null && mounted) setState(() => _companyName = val);
     });
+  }
+
+  @override
+  void dispose() {
+    _addMenuController.dispose();
+    super.dispose();
+  }
+
+  void _setOverviewFilterOpen(bool open) {
+    if (mounted) setState(() => _isOverviewFilterOpen = open);
+  }
+
+  void _toggleAddMenu() {
+    setState(() => _isAddMenuOpen = !_isAddMenuOpen);
+    if (_isAddMenuOpen) {
+      _addMenuController.forward();
+    } else {
+      _addMenuController.reverse();
+    }
+  }
+
+  void _closeAddMenu() {
+    if (!_isAddMenuOpen) return;
+    setState(() => _isAddMenuOpen = false);
+    _addMenuController.reverse();
+  }
+
+  // Closes the menu first, then runs the action a beat later so the
+  // retract animation gets to play instead of being cut off by a push route.
+  void _runQuickAdd(VoidCallback action) {
+    _closeAddMenu();
+    Future.delayed(const Duration(milliseconds: 120), () {
+      if (mounted) action();
+    });
+  }
+
+  List<_QuickAddOption> _quickAddOptions() {
+    return [
+      _QuickAddOption(
+        label: 'Sales',
+        icon: Icons.point_of_sale_rounded,
+        color: const Color(0xFF10B981),
+        onTap: () => _runQuickAdd(
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SaleScreen())),
+        ),
+      ),
+      _QuickAddOption(
+        label: 'Purchase',
+        icon: Icons.shopping_bag_rounded,
+        color: const Color(0xFF3B82F6),
+        onTap: () => _runQuickAdd(
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseScreen())),
+        ),
+      ),
+      _QuickAddOption(
+        label: 'Cash / Bank',
+        icon: Icons.account_balance_rounded,
+        color: const Color(0xFF6366F1),
+        // TODO: point this at your real Cash/Bank entry screen.
+        onTap: () => _runQuickAdd(
+          () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cash / Bank screen coming soon')),
+          ),
+        ),
+      ),
+      _QuickAddOption(
+        label: 'Sales Order',
+        icon: Icons.receipt_long_rounded,
+        color: const Color(0xFFF59E0B),
+        // TODO: point this at your real Sales Order screen.
+        onTap: () => _runQuickAdd(
+          () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Sales Order screen coming soon')),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  // Maps the shared controller (0..1) to a per-item 0..1 progress value so
+  // each option animates in with a slight delay after the one before it.
+  double _staggerValue(double t, int index) {
+    final start = index * 0.12;
+    final end = (start + 0.6).clamp(0.0, 1.0);
+    if (t <= start) return 0.0;
+    if (t >= end) return 1.0;
+    return (t - start) / (end - start);
   }
 
   Future<void> _onSyncPressed() async {
@@ -53,50 +162,150 @@ class _HomePageState extends State<HomePage> {
     setState(() => _isSyncing = false);
   }
 
+  Widget _buildQuickAddMenu() {
+    final options = _quickAddOptions();
+    final bottomSafe = MediaQuery.of(context).padding.bottom;
+
+    return AnimatedBuilder(
+      animation: _addMenuController,
+      builder: (context, _) {
+        final t = _addMenuController.value;
+        return IgnorePointer(
+          ignoring: t == 0,
+          child: Stack(
+            children: [
+              // Tap-outside-to-close scrim.
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _closeAddMenu,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 2 * t, sigmaY: 2 * t),
+                    child: Container(color: Colors.black.withValues(alpha: 0.35 * t)),
+                  ),
+                ),
+              ),
+              // Options springing out of the add button.
+              Positioned(
+                right: 16,
+                bottom: bottomSafe + 12 + 64 + 16,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: List.generate(options.length, (i) {
+                    final progress = _staggerValue(t, i);
+                    final scale = Curves.elasticOut.transform(progress);
+                    final opacity = Curves.easeOut.transform(progress.clamp(0.0, 1.0));
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Transform.scale(
+                        scale: scale,
+                        alignment: Alignment.bottomRight,
+                        child: Opacity(
+                          opacity: opacity,
+                          child: _QuickAddButton(option: options[i]),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 👉 FIX 1: AnnotatedRegion forces Android to drop the white system background
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarDividerColor: Colors.transparent,
-        systemNavigationBarIconBrightness: Brightness.dark,
-        systemNavigationBarContrastEnforced: false, 
-      ),
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF9FAFB),
-        drawer: const CustomDrawer(),
-        // REQUIRED for the glass effect: lets page content scroll UNDER the nav bar
-        extendBody: true,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: true,
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1),
-            child: Container(color: const Color(0xFFEEF0FE), height: 1),
-          ),
-          title: Text(
-            _companyName,
-            style: const TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
+    return Stack(
+      children: [
+        // ---- iOS-style "push back" -- the whole screen scales down
+        // slightly and gains rounded corners while the Overview filter
+        // sheet is open, revealing the dark backdrop behind it. Applied
+        // here (outermost) so the app bar and bottom nav scale together
+        // with the page content, matching the native modal-presentation feel.
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          color: Colors.black,
+          child: AnimatedScale(
+            scale: _isOverviewFilterOpen ? 0.90 : 1.0,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(_isOverviewFilterOpen ? 28 : 0),
+              ),
+              child: Stack(
+                children: [
+                  // 👉 FIX 1: AnnotatedRegion forces Android to drop the white system background
+                  AnnotatedRegion<SystemUiOverlayStyle>(
+                    value: const SystemUiOverlayStyle(
+                      systemNavigationBarColor: Colors.transparent,
+                      systemNavigationBarDividerColor: Colors.transparent,
+                      systemNavigationBarIconBrightness: Brightness.dark,
+                      systemNavigationBarContrastEnforced: false,
+                    ),
+                    child: Scaffold(
+                      backgroundColor: const Color(0xFFF9FAFB),
+                      drawer: const CustomDrawer(),
+                      // REQUIRED for the glass effect: lets page content scroll UNDER the nav bar
+                      extendBody: true,
+                      appBar: AppBar(
+                        backgroundColor: Colors.white,
+                        elevation: 0,
+                        centerTitle: true,
+                        bottom: PreferredSize(
+                          preferredSize: const Size.fromHeight(1),
+                          child: Container(color: const Color(0xFFEEF0FE), height: 1),
+                        ),
+                        title: Text(
+                          _companyName,
+                          style: const TextStyle(
+                            color: Color(0xFF0F172A),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      // 👉 FIX 2: Set bottom: false so the content flows beautifully under the glass navbar
+                      body: SafeArea(
+                        bottom: false,
+                        child: IndexedStack(index: _currentIndex, children: _pages),
+                      ),
+                      bottomNavigationBar: _GlassBottomNav(
+                        currentIndex: _currentIndex,
+                        isAddMenuOpen: _isAddMenuOpen,
+                        onTap: (i) => setState(() => _currentIndex = i),
+                        onAddTap: _toggleAddMenu,
+                      ),
+                    ),
+                  ),
+                  // Explicit scrim so the push-back is *guaranteed* visible,
+                  // instead of relying on the bottom sheet's own barrier
+                  // (which is drawn in a separate layer above this whole
+                  // page and was masking the effect).
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                        opacity: _isOverviewFilterOpen ? 0.28 : 0.0,
+                        child: Container(color: Colors.black),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-        
-        // 👉 FIX 2: Set bottom: false so the content flows beautifully under the glass navbar
-        body: SafeArea(
-          bottom: false, 
-          child: IndexedStack(index: _currentIndex, children: _pages),
-        ),
-        
-        bottomNavigationBar: _GlassBottomNav(
-          currentIndex: _currentIndex,
-          onTap: (i) => setState(() => _currentIndex = i),
-        ),
-      ),
+        _buildQuickAddMenu(),
+      ],
     );
   }
 }
@@ -105,17 +314,36 @@ class _HomePageState extends State<HomePage> {
 // DASHBOARD PAGE
 // ============================================================================
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  // Notifies HomePage when the Overview filter sheet opens/closes, so the
+  // whole screen (app bar + bottom nav included) can do the push-back
+  // animation -- not just this page's own content.
+  final ValueChanged<bool>? onFilterSheetOpenChanged;
+
+  const DashboardPage({super.key, this.onFilterSheetOpenChanged});
+
   @override
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
 class _DashboardPageState extends State<DashboardPage> {
   final _dashboardService = DashboardService();
-
   bool _isLoading = true;
   String _selectedPeriod = 'Last 24 Hours';
   DateTimeRange? _customRange;
+
+  static const Color _kDashAccent = Color(0xFF4F46E5);
+  static const Color _kDashAccentBg = Color(0xFFEEF0FE);
+  static const Color _kBorder = Color(0xFFE7E9ED);
+  static const Color _kMuted = Color(0xFF8A8F9A);
+  static const Color _kInk = Color(0xFF15171C);
+
+  static const List<String> _periodOptions = [
+    'Last 24 Hours',
+    '1 Week',
+    '1 Month',
+    '1 Year',
+    'Custom Date',
+  ];
 
   double _salesAmt = 0, _purchAmt = 0, _custOut = 0, _vendOut = 0, _payables = 0, _receivables = 0, _stockVal = 0;
   int _salesQty = 0, _purchQty = 0, _stockQty = 0;
@@ -151,6 +379,96 @@ class _DashboardPageState extends State<DashboardPage> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // ---- compact filter bottom sheet, styled after PurchaseScreen's
+  // _showFilterSheet (ChoiceChips) instead of the old full-width dropdown ----
+  void _showPeriodFilterSheet() {
+    // Kick off the push-back animation on HomePage right away, before the
+    // sheet finishes animating in, so it reads as one continuous motion.
+    widget.onFilterSheetOpenChanged?.call(true);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      // HomePage now renders its own scrim synced to the push-back
+      // animation, so the sheet's default barrier is turned off here to
+      // avoid double-darkening (and to stop it from masking the effect).
+      barrierColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  decoration: BoxDecoration(color: _kBorder, borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const Text('Filter Overview', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _kInk)),
+              const SizedBox(height: 20),
+              const Text('DATE RANGE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.8)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 10,
+                children: _periodOptions.map((label) {
+                  final isSelected = _selectedPeriod == label;
+                  return ChoiceChip(
+                    label: Text(label),
+                    selected: isSelected,
+                    showCheckmark: false,
+                    selectedColor: _kDashAccent,
+                    backgroundColor: Colors.white,
+                    side: BorderSide(color: isSelected ? _kDashAccent : _kBorder),
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : _kInk,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 13,
+                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    onSelected: (selected) async {
+                      if (!selected) return;
+                      if (label == 'Custom Date') {
+                        final picked = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _customRange = picked;
+                            _selectedPeriod = 'Custom Date';
+                          });
+                          if (context.mounted) Navigator.pop(context);
+                          _fetchData();
+                        }
+                      } else {
+                        setState(() {
+                          _selectedPeriod = label;
+                          _customRange = null;
+                        });
+                        Navigator.pop(context);
+                        _fetchData();
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        );
+      },
+    ).whenComplete(() {
+      // Sheet closed (any way -- selection, custom-date picker, or swipe
+      // dismiss) -- animate the screen back to its normal size.
+      widget.onFilterSheetOpenChanged?.call(false);
+    });
   }
 
   Widget _buildSkeletonLoader() {
@@ -228,7 +546,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      color: const Color(0xFF4F46E5),
+      color: _kDashAccent,
       onRefresh: _fetchData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -236,22 +554,37 @@ class _DashboardPageState extends State<DashboardPage> {
         child: _isLoading
             ? _buildSkeletonLoader()
             : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          DropdownButtonHideUnderline(child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
-            child: DropdownButton<String>(
-              value: _selectedPeriod, isExpanded: true, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
-              items: ['Last 24 Hours', '1 Week', '1 Month', '1 Year', 'Custom Date'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-              onChanged: (v) async {
-                if (v == 'Custom Date') {
-                  final picked = await showDateRangePicker(context: context, firstDate: DateTime(2000), lastDate: DateTime.now().add(const Duration(days: 365)));
-                  if (picked != null) setState(() { _customRange = picked; _selectedPeriod = 'Custom Date'; _fetchData(); });
-                } else if (v != null) setState(() { _selectedPeriod = v; _customRange = null; _fetchData(); });
-              },
-            ),
-          )),
-          const SizedBox(height: 24),
-          const Text('Overview', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Overview', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+              InkWell(
+                onTap: _showPeriodFilterSheet,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _kDashAccentBg,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _kDashAccent.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_today_rounded, size: 12, color: _kDashAccent),
+                      const SizedBox(width: 6),
+                      Text(
+                        _selectedPeriod,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kDashAccent),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: _kDashAccent),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           Row(children: [
             _gridItem("Sales", Icons.trending_up, const Color(0xFF10B981), _salesAmt, _salesQty, null, const SaleScreen()),
@@ -278,8 +611,69 @@ class _DashboardPageState extends State<DashboardPage> {
 
 class AddNewContentPage extends StatelessWidget {
   const AddNewContentPage({super.key});
+
   @override
   Widget build(BuildContext context) => const Center(child: Text('Add New Content'));
+}
+
+// ============================================================================
+// QUICK-ADD SPEED-DIAL DATA + BUTTON
+// ============================================================================
+class _QuickAddOption {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickAddOption({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+}
+
+class _QuickAddButton extends StatelessWidget {
+  final _QuickAddOption option;
+
+  const _QuickAddButton({required this.option});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: option.onTap,
+        child: Container(
+          padding: const EdgeInsets.only(left: 16, right: 6, top: 6, bottom: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 14, offset: const Offset(0, 6)),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                option.label,
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: option.color, shape: BoxShape.circle),
+                child: Icon(option.icon, color: Colors.white, size: 20),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ============================================================================
@@ -287,9 +681,16 @@ class AddNewContentPage extends StatelessWidget {
 // ============================================================================
 class _GlassBottomNav extends StatelessWidget {
   final int currentIndex;
+  final bool isAddMenuOpen;
   final ValueChanged<int> onTap;
+  final VoidCallback onAddTap;
 
-  const _GlassBottomNav({required this.currentIndex, required this.onTap});
+  const _GlassBottomNav({
+    required this.currentIndex,
+    required this.isAddMenuOpen,
+    required this.onTap,
+    required this.onAddTap,
+  });
 
   static const List<_NavItemData> _items = [
     _NavItemData(index: 0, icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home'),
@@ -311,7 +712,7 @@ class _GlassBottomNav extends StatelessWidget {
               child: _GlassPill(currentIndex: currentIndex, onTap: onTap, items: _items),
             ),
             const SizedBox(width: 12),
-            _GlassAddButton(isSelected: currentIndex == 2, onTap: () => onTap(2)),
+            _GlassAddButton(isSelected: isAddMenuOpen, onTap: onAddTap),
           ],
         ),
       ),
@@ -470,7 +871,7 @@ class _GlassAddButton extends StatelessWidget {
             ),
             child: AnimatedRotation(
               duration: const Duration(milliseconds: 250),
-              turns: isSelected ? 0.125 :  0,
+              turns: isSelected ? 0.125 : 0,
               child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
             ),
           ),
