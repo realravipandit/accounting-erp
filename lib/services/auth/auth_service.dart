@@ -15,7 +15,6 @@ class AuthService {
   static const String _kTokenKey = 'jwt_token';
   static const String _kCompanyIdKey = 'selected_company_id';
   static const String _kCompanyCodeKey = 'selected_company_code';
-  static const String _kCentralDbKey = 'saved_central_db';
 
   // ============================================================
   // LOGIN
@@ -50,9 +49,9 @@ class AuthService {
         return false;
       }
 
-      // Persist token and the selected database mode
+      // 1. Just save the token. 
+      // 2. The LoginScreen already handles saving the 'true/false' database toggle.
       await _storage.write(key: _kTokenKey, value: token.toString());
-      await _storage.write(key: _kCentralDbKey, value: centralDatabase);
 
       return true;
     } catch (_) {
@@ -85,6 +84,7 @@ class AuthService {
   // LOGOUT & SESSION MANAGEMENT
   // ============================================================
   Future<void> logout() async {
+    // Only deleting session tokens keeps your UI states and IPs intact
     await _storage.delete(key: _kTokenKey);
     await _storage.delete(key: _kCompanyIdKey);
     await _storage.delete(key: _kCompanyCodeKey);
