@@ -1,15 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui'; // Required for ImageFilter.blur in the liquid toggle
+import 'dart:ui'; 
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Required for AnnotatedRegion & SystemUIOverlayStyle
+import 'package:flutter/services.dart'; 
 import 'package:http/http.dart' as http;
-import 'package:sas_akount_login/services/auth/auth_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import 'package:sas_akount_login/services/auth/auth_service.dart';
 import 'package:sas_akount_login/core/database/db_helper.dart';
 import 'register_screen.dart';
 import 'package:sas_akount_login/features/company/company_selection_screen.dart';
+import 'package:sas_akount_login/core/services/toast_service.dart'; // Update path if needed
 
 final _storage = const FlutterSecureStorage();
 
@@ -98,6 +100,7 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
 
   Future<void> _loadSavedData() async {
     final savedRememberMe = await _storage.read(key: 'remember_me');
+
     if (savedRememberMe == 'true') {
       final savedUsername = await _storage.read(key: 'saved_username');
       final savedPassword = await _storage.read(key: 'saved_password');
@@ -117,8 +120,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
       });
     }
 
-    // Server address: load active (if any) into the field,
-    // and the last-known-good separately for the suggestion chip.
     final activeServer = await _storage.read(key: _kActiveServerKey);
     final lastGood = await _storage.read(key: _kLastGoodServerKey);
 
@@ -130,8 +131,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
         _lastKnownGoodServer = lastGood;
       });
 
-      // If we already have an address from a previous session, verify it
-      // silently in the background so the chip reflects reality on open.
       if (_serverController.text.trim().isNotEmpty) {
         _checkServer(_serverController.text, silent: true);
       }
@@ -165,7 +164,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
           .timeout(const Duration(seconds: 3));
 
       if (!mounted) return;
-
       bool ok = false;
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
@@ -207,24 +205,24 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     setState(() => _isLoading = true);
 
     final username = _usernameController.text.trim();
-    final password = _passwordController.text;
+    final password = _passwordController.text; // Now accepts blank
 
-    if (username.isEmpty || password.isEmpty) {
+    if (username.isEmpty) {
       setState(() => _isLoading = false);
-      _showSnack('Please fill in both username and password', isError: true);
+      ToastService.showError(context, 'Please enter your username');
       return;
     }
 
     if (_serverController.text.trim().isEmpty) {
       setState(() => _isLoading = false);
-      _showSnack('Please enter a server address', isError: true);
+      ToastService.showError(context, 'Please enter a server address');
       return;
     }
 
-    // Make sure whatever's in the field right now is saved as active,
-    // even if the debounce hasn't fired yet (e.g. fast typers).
     final baseUrl = _normalizeServerAddress(_serverController.text);
+    
     await _storage.write(key: _kActiveServerKey, value: baseUrl);
+    await _storage.write(key: 'saved_central_db', value: _isAkountMaster.toString());
 
     final targetDb = _isAkountMaster ? 'SmAkountMaster' : 'SASBillingMaster';
 
@@ -243,8 +241,10 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
           await _storage.delete(key: 'saved_password');
           await _storage.write(key: 'remember_me', value: 'false');
         }
-
         await _storage.write(key: _kLastGoodServerKey, value: baseUrl);
+
+        // Optional: Show success toast right before navigating
+        ToastService.showSuccess(context, 'Login successful!');
 
         Navigator.pushReplacement(
           context,
@@ -257,26 +257,14 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
         );
       } else {
         setState(() => _isLoading = false);
-        _showSnack('Invalid username or password.', isError: true);
+        ToastService.showError(context, 'Invalid username or password.');
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      _showSnack('Connection failed: Unable to reach the server.', isError: true);
+      ToastService.showError(context, 'Connection failed: Unable to reach the server.');
       debugPrint('Backend Connection Error: $e');
     }
-  }
-
-  void _showSnack(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(color: Colors.white)),
-        backgroundColor: isError ? const Color(0xFFE11D48) : const Color(0xFF9BBDE2),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
   }
 
   @override
@@ -385,12 +373,9 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                 ),
                               ),
                               const SizedBox(height: 28),
-
-                              // --- Server address field ---
                               _buildServerInput(),
                               if (_showServerSuggestion) _buildServerSuggestion(),
                               const SizedBox(height: 12),
-
                               _buildInput(
                                 controller: _usernameController,
                                 focusNode: _usernameFocus,
@@ -408,7 +393,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                 isPassword: true,
                               ),
                               const SizedBox(height: 18),
-
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
@@ -453,7 +437,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                 ],
                               ),
                               const SizedBox(height: 30),
-
                               SizedBox(
                                 height: 52,
                                 child: ElevatedButton(
@@ -489,7 +472,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                           ),
                         ),
                         const SizedBox(height: 28),
-
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -516,7 +498,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                           ],
                         ),
                         const SizedBox(height: 20),
-
                         Text(
                           'By signing in, you agree to our Terms of Service\nand Privacy Policy.',
                           textAlign: TextAlign.center,
@@ -538,11 +519,10 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     );
   }
 
-  // --- Compact server address field, styled to match _buildInput ---
   Widget _buildServerInput() {
     final isFocused = _serverFocus.hasFocus;
-
     Widget? statusIcon;
+
     switch (_serverState) {
       case _ConnState.checking:
         statusIcon = SizedBox(
@@ -629,7 +609,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     );
   }
 
-  // Liquid Glass Elastic Toggle Switch
   Widget _buildToggle() {
     return Container(
       height: 56,
@@ -721,7 +700,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     );
   }
 
-  // --- Compact, sleek input field ---
   Widget _buildInput({
     required TextEditingController controller,
     required FocusNode focusNode,

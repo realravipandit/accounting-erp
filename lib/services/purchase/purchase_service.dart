@@ -10,33 +10,44 @@ class PurchaseService {
   final ApiService _api;
 
   // ============================================================
-  // GET PURCHASE RECORDS
+  // GET PURCHASE RECORDS (PAGINATED & FILTERED)
   // ============================================================
-
   Future<Map<String, dynamic>> fetchPurchases([RecordQuery? query]) async {
-    // Safety check so background sync doesn't crash if query is null
     query ??= RecordQuery();
+
+    // Ensure query parameters map cleanly to string key-values
+    final Map<String, dynamic> rawParams = query.toQueryParameters();
+    final Map<String, String> queryParams = rawParams.map(
+      (key, value) => MapEntry(key, value?.toString() ?? ''),
+    )..removeWhere((key, value) => value.isEmpty);
 
     final response = await _api.get(
       'purchase',
-      queryParameters: query.toQueryParameters(),
+      queryParameters: queryParams,
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to load purchase records');
+      throw Exception('Failed to load purchase records (Status: ${response.statusCode})');
     }
 
-    final data = jsonDecode(response.body);
+    final dynamic data = jsonDecode(response.body);
 
-    // Scenario 1: New Backend Format { "data": [...], "meta": {...} }
+    // Format 1: Standard API Response { "data": [...], "meta": {...} }
     if (data is Map<String, dynamic> && data.containsKey('data')) {
-      return data; 
+      return {
+        'data': (data['data'] as List? ?? []),
+        'meta': data['meta'] ?? {
+          'page': query.page,
+          'limit': query.limit,
+          'totalPages': 1,
+        },
+      };
     }
 
-    // Scenario 2: Old Backend Format { "records": [...], "pagination": {...} }
+    // Format 2: Legacy API Response { "records": [...], "pagination": {...} }
     if (data is Map<String, dynamic> && data.containsKey('records')) {
       return {
-        'data': data['records'] ?? [],
+        'data': (data['records'] as List? ?? []),
         'meta': data['pagination'] ?? data['meta'] ?? {
           'page': query.page,
           'limit': query.limit,
@@ -45,21 +56,24 @@ class PurchaseService {
       };
     }
 
-    // Scenario 3: Raw List [...]
-    return {
-      'data': data is List ? data : [],
-      'meta': {
-        'page': query.page,
-        'limit': query.limit,
-        'totalPages': 1,
-      },
-    };
+    // Format 3: Raw Array Response [...]
+    if (data is List) {
+      return {
+        'data': data,
+        'meta': {
+          'page': query.page,
+          'limit': query.limit,
+          'totalPages': 1,
+        },
+      };
+    }
+
+    return {'data': [], 'meta': {'page': 1, 'limit': 25, 'totalPages': 1}};
   }
 
   // ============================================================
-  // GET PURCHASE DETAILS
+  // GET PURCHASE DETAILS (BY VOUCHER ID)
   // ============================================================
-
   Future<Map<String, dynamic>> fetchPurchaseDetails(String voucherId) async {
     final response = await _api.get(
       'purchase/details',
@@ -67,12 +81,14 @@ class PurchaseService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to load purchase details');
+      throw Exception('Failed to load purchase details (Status: ${response.statusCode})');
     }
 
-    final data = jsonDecode(response.body);
+    final dynamic data = jsonDecode(response.body);
     if (data is Map<String, dynamic>) {
-      return data;
+      return data.containsKey('data') && data['data'] is Map<String, dynamic>
+          ? data['data']
+          : data;
     }
     return {};
   }
@@ -80,7 +96,6 @@ class PurchaseService {
   // ============================================================
   // GET PURCHASE VENDORS
   // ============================================================
-
   Future<List<Map<String, dynamic>>> getPurchaseVendors() async {
     final response = await _api.get('purchase/vendors');
 
@@ -88,23 +103,20 @@ class PurchaseService {
       throw Exception('Failed to load purchase vendors');
     }
 
-    final data = jsonDecode(response.body);
+    final dynamic data = jsonDecode(response.body);
 
     if (data is List) {
       return data.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
     }
-
     if (data is Map && data['data'] is List) {
       return (data['data'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
     }
-
     return [];
   }
 
   // ============================================================
-  // GET NEXT PURCHASE VOUCHER
+  // GET NEXT PURCHASE VOUCHER NUMBER
   // ============================================================
-
   Future<String> getNextPurchaseVoucher() async {
     final response = await _api.get('purchase/next-voucher');
 
@@ -112,19 +124,20 @@ class PurchaseService {
       throw Exception('Failed to get next purchase voucher');
     }
 
-    final data = jsonDecode(response.body);
+    final dynamic data = jsonDecode(response.body);
 
     if (data is Map) {
-      return data['voucherNo']?.toString() ?? data['voucherId']?.toString() ?? '';
+      return data['voucherNo']?.toString() ??
+             data['voucherId']?.toString() ??
+             data['nextVoucher']?.toString() ??
+             '';
     }
-
     return data?.toString() ?? '';
   }
 
   // ============================================================
   // GET PURCHASE TERM MASTERS
   // ============================================================
-
   Future<List<dynamic>> fetchPurchaseTermMasters() async {
     final response = await _api.get('purchase/term-masters');
 
@@ -132,40 +145,33 @@ class PurchaseService {
       throw Exception('Failed to load purchase term masters');
     }
 
-    final data = jsonDecode(response.body);
-
+    final dynamic data = jsonDecode(response.body);
     if (data is List) return data;
     if (data is Map && data['data'] is List) return data['data'];
-
     return [];
   }
 
   // ============================================================
-  // SUBMIT PURCHASE
+  // SUBMIT PURCHASE VOUCHER
   // ============================================================
-
   Future<Map<String, dynamic>> submitPurchase(Map<String, dynamic> purchaseData) async {
     final response = await _api.post(
       'purchase/submit',
       body: purchaseData,
     );
 
-    final data = response.body.isNotEmpty ? jsonDecode(response.body) : <String, dynamic>{};
+    final dynamic data = response.body.isNotEmpty ? jsonDecode(response.body) : <String, dynamic>{};
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        data is Map && data['message'] != null
-            ? data['message'].toString()
-            : data is Map && data['error'] != null
-                ? data['error'].toString()
-                : 'Failed to submit purchase',
-      );
+      final errorMessage = (data is Map)
+          ? (data['message'] ?? data['error'] ?? 'Failed to submit purchase')
+          : 'Failed to submit purchase';
+      throw Exception(errorMessage.toString());
     }
 
     if (data is Map<String, dynamic>) {
       return data;
     }
-
     return {};
   }
 }

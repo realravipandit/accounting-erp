@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -35,13 +36,10 @@ class ApiService {
 
     return {
       ..._baseHeaders,
-
       if (token != null && token.isNotEmpty)
         'Authorization': 'Bearer $token',
-
       if (companyId != null && companyId.isNotEmpty)
         'company-id': companyId,
-
       if (companyCode != null && companyCode.isNotEmpty)
         'x-company-code': companyCode,
     };
@@ -133,7 +131,7 @@ class ApiService {
     return _client.get(
       uri,
       headers: headers,
-    );
+    ).timeout(const Duration(seconds: 10)); // Added timeout
   }
 
   // ============================================================
@@ -155,7 +153,7 @@ class ApiService {
       uri,
       headers: headers,
       body: body == null ? null : jsonEncode(body),
-    );
+    ).timeout(const Duration(seconds: 10)); // Added timeout
   }
 
   // ============================================================
@@ -177,7 +175,7 @@ class ApiService {
       uri,
       headers: headers,
       body: body == null ? null : jsonEncode(body),
-    );
+    ).timeout(const Duration(seconds: 10)); // Added timeout
   }
 
   // ============================================================
@@ -199,7 +197,7 @@ class ApiService {
       uri,
       headers: headers,
       body: body == null ? null : jsonEncode(body),
-    );
+    ).timeout(const Duration(seconds: 10)); // Added timeout
   }
 
   // ============================================================
