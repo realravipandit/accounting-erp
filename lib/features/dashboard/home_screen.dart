@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // 👉 REQUIRED FOR TRANSPARENT SYSTEM BAR
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:sas_akount_login/features/sales/sales_order_entry_screen.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'package:sas_akount_login/services/dashboard/dashboard_service.dart';
@@ -16,6 +17,9 @@ import 'package:sas_akount_login/features/reports/outstanding_screen.dart';
 import 'package:sas_akount_login/core/services/sync_service.dart';
 import 'package:sas_akount_login/features/inventory/inventory_screen.dart';
 import 'package:sas_akount_login/features/reports/ageing_screen.dart';
+import 'package:sas_akount_login/features/sales/sales_entry_screen.dart';
+import 'package:sas_akount_login/features/purchase/purchase_entry_screen.dart';
+import 'package:sas_akount_login/features/banking/cash_bank_entry_screen.dart';
 
 // ============================================================================
 // HOME PAGE
@@ -109,7 +113,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         icon: Icons.point_of_sale_rounded,
         color: const Color(0xFF10B981),
         onTap: () => _runQuickAdd(
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SaleScreen())),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesEntryScreen())),
         ),
       ),
       _QuickAddOption(
@@ -117,31 +121,25 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         icon: Icons.shopping_bag_rounded,
         color: const Color(0xFF3B82F6),
         onTap: () => _runQuickAdd(
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseScreen())),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseEntryScreen())),
         ),
       ),
       _QuickAddOption(
         label: 'Cash / Bank',
         icon: Icons.account_balance_rounded,
         color: const Color(0xFF6366F1),
-        // TODO: point this at your real Cash/Bank entry screen.
         onTap: () => _runQuickAdd(
-          () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Cash / Bank screen coming soon')),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CashBankEntryScreen())),
           ),
         ),
-      ),
       _QuickAddOption(
         label: 'Sales Order',
         icon: Icons.receipt_long_rounded,
         color: const Color(0xFFF59E0B),
-        // TODO: point this at your real Sales Order screen.
         onTap: () => _runQuickAdd(
-          () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sales Order screen coming soon')),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesOrderEntryScreen())),
           ),
         ),
-      ),
     ];
   }
 
@@ -742,15 +740,15 @@ class _GlassPill extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(32),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
         child: Container(
           height: 64,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.02),
+            color: const Color(0xFF15171C).withValues(alpha: 0.85), // dark ink glass, not white
             borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.30), width: 1),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 1),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 12, offset: const Offset(0, 4)),
+              BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 24, offset: const Offset(0, 10)),
             ],
           ),
           child: LayoutBuilder(
@@ -770,12 +768,9 @@ class _GlassPill extends StatelessWidget {
                       opacity: selectedPos >= 0 ? 1 : 0,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.30),
+                          color: Colors.white.withValues(alpha: 0.15), // frosted highlight pill on dark glass
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.45), width: 1),
-                          boxShadow: [
-                            BoxShadow(color: Colors.white.withValues(alpha: 0.25), blurRadius: 14, spreadRadius: 1),
-                          ],
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
                         ),
                       ),
                     ),
@@ -799,8 +794,8 @@ class _GlassPill extends StatelessWidget {
                                   selected ? item.activeIcon : item.icon,
                                   key: ValueKey(selected),
                                   size: 22,
-                                  color: selected ? const Color(0xFF312E81) : const Color(0xFF1F2937).withValues(alpha: 0.75),
-                                  shadows: const [Shadow(color: Colors.black26, blurRadius: 6)],
+                                  // Light icons/text on dark glass -- inverted from the light variant
+                                  color: selected ? Colors.white : Colors.white.withValues(alpha: 0.55),
                                 ),
                               ),
                               const SizedBox(height: 3),
@@ -811,8 +806,7 @@ class _GlassPill extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 10.5,
                                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                  color: selected ? const Color(0xFF312E81) : const Color(0xFF1F2937).withValues(alpha: 0.75),
-                                  shadows: const [Shadow(color: Colors.black26, blurRadius: 6)],
+                                  color: selected ? Colors.white : Colors.white.withValues(alpha: 0.55),
                                 ),
                               ),
                             ],
@@ -859,7 +853,7 @@ class _GlassAddButton extends StatelessWidget {
                   const Color(0xFF9333EA).withValues(alpha: isSelected ? 0.38 : 0.24),
                 ],
               ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1), // was alpha: 0.4
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF4F46E5).withValues(alpha: isSelected ? 0.22 : 0.12),

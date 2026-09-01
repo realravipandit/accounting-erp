@@ -518,9 +518,6 @@ class _LedgerPickerSheetState extends State<_LedgerPickerSheet> {
   }
 }
 
-/// =====================================================================
-/// shared shell + button
-/// =====================================================================
 class _SheetShell extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -536,8 +533,11 @@ class _SheetShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomSafeArea = MediaQuery.of(context).padding.bottom;
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: keyboardInset),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * maxHeightFraction),
         child: Container(
@@ -545,7 +545,12 @@ class _SheetShell extends StatelessWidget {
             color: _T.bg,
             borderRadius: BorderRadius.vertical(top: Radius.circular(_T.sheetRadius)),
           ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            12,
+            20,
+            20 + bottomSafeArea, // <-- lifts content above gesture nav bar
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

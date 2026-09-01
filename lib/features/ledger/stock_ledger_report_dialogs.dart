@@ -443,9 +443,6 @@ class _StockItemPickerSheetState extends State<_StockItemPickerSheet> {
   }
 }
 
-/// =====================================================================
-/// shared shell + button
-/// =====================================================================
 class _SheetShell extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -470,25 +467,28 @@ class _SheetShell extends StatelessWidget {
             color: _T.bg,
             borderRadius: BorderRadius.vertical(top: Radius.circular(_T.sheetRadius)),
           ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(color: _T.line, borderRadius: BorderRadius.circular(2)),
+          child: SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(color: _T.line, borderRadius: BorderRadius.circular(2)),
+                  ),
                 ),
-              ),
-              Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: _T.ink)),
-              const SizedBox(height: 2),
-              Text(subtitle, style: const TextStyle(fontSize: 13, color: _T.sub)),
-              const SizedBox(height: 18),
-              Expanded(child: child),
-            ],
+                Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: _T.ink)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: const TextStyle(fontSize: 13, color: _T.sub)),
+                const SizedBox(height: 18),
+                Expanded(child: child),
+              ],
+            ),
           ),
         ),
       ),

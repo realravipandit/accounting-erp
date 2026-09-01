@@ -451,18 +451,29 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                         ),
             ),
 
+            
             // --- PAGINATION ---
             Container(
               decoration: const BoxDecoration(
                 color: _kBg,
                 border: Border(top: BorderSide(color: _kBorder, width: 0.5)),
               ),
-              padding: EdgeInsets.fromLTRB(16, 2, 16, MediaQuery.of(context).padding.bottom > 0 ? 8 : 12),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                2,
+                16,
+                8 + (MediaQuery.of(context).padding.bottom * 0.7), // was: MediaQuery.of(context).padding.bottom > 0 ? 8 : 12
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   TextButton.icon(
-                    onPressed: _currentQuery.page > 1 ? () { setState(() => _currentQuery.page--); _fetchData(); } : null,
+                    onPressed: _currentQuery.page > 1
+                        ? () {
+                            setState(() => _currentQuery.page--);
+                            _fetchData();
+                          }
+                        : null,
                     icon: const Icon(Icons.chevron_left_rounded, size: 18),
                     label: const Text('Prev'),
                     style: TextButton.styleFrom(
@@ -471,9 +482,15 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                       visualDensity: VisualDensity.compact,
                     ),
                   ),
-                  Text('Page ${_currentQuery.page} of $_totalPages', style: const TextStyle(fontWeight: FontWeight.w700, color: _kMuted, fontSize: 13)),
+                  Text('Page ${_currentQuery.page} of $_totalPages',
+                      style: const TextStyle(fontWeight: FontWeight.w700, color: _kMuted, fontSize: 13)),
                   TextButton.icon(
-                    onPressed: _currentQuery.page < _totalPages ? () { setState(() => _currentQuery.page++); _fetchData(); } : null,
+                    onPressed: _currentQuery.page < _totalPages
+                        ? () {
+                            setState(() => _currentQuery.page++);
+                            _fetchData();
+                          }
+                        : null,
                     icon: const Icon(Icons.chevron_right_rounded, size: 18),
                     label: const Text('Next'),
                     style: TextButton.styleFrom(
