@@ -1,8 +1,8 @@
 
 import 'package:flutter/material.dart';
-import 'package:sas_akount_login/features/auth/login_screen.dart';
-import 'package:sas_akount_login/core/database/db_helper.dart';
-import 'package:sas_akount_login/models/auth/user_model.dart';
+import 'package:sas_app/features/auth/login_screen.dart';
+import 'package:sas_app/core/database/db_helper.dart';
+import 'package:sas_app/models/auth/user_model.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});

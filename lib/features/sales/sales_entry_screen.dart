@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sas_akount_login/services/sales/sales_service.dart';
+import 'package:sas_app/services/sales/sales_service.dart';
 import 'package:intl/intl.dart';
 import 'package:nepali_date_picker/nepali_date_picker.dart';
 

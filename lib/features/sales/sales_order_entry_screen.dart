@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:nepali_date_picker/nepali_date_picker.dart';
-import 'package:sas_akount_login/services/sales/sales_service.dart';
-import 'package:sas_akount_login/features/sales/sales_entry_screen.dart'; // For ItemSearchScreen reuse
+import 'package:sas_app/services/sales/sales_service.dart';
+import 'package:sas_app/features/sales/sales_entry_screen.dart'; // For ItemSearchScreen reuse
 
 class SalesOrderEntryScreen extends StatefulWidget {
   const SalesOrderEntryScreen({super.key});

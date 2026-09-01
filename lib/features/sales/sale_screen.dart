@@ -1,9 +1,9 @@
   import 'package:flutter/material.dart';
 
   // Adjust these imports to match your exact folder paths
-  import 'package:sas_akount_login/services/sales/sales_service.dart';
-  import 'package:sas_akount_login/models/common/record_query.dart';
-  import 'package:sas_akount_login/features/sales/sale_details_sheet.dart'; // Adjust name if needed
+  import 'package:sas_app/services/sales/sales_service.dart';
+  import 'package:sas_app/models/common/record_query.dart';
+  import 'package:sas_app/features/sales/sale_details_sheet.dart'; // Adjust name if needed
 
   // --- PALETTE -------------------------------------------------------
   const _kInk = Color(0xFF15171C);

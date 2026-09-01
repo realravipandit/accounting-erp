@@ -4,22 +4,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // 👉 REQUIRED FOR TRANSPARENT SYSTEM BAR
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:sas_akount_login/features/sales/sales_order_entry_screen.dart';
+import 'package:sas_app/features/sales/sales_order_entry_screen.dart';
 import 'package:shimmer/shimmer.dart';
 
-import 'package:sas_akount_login/services/dashboard/dashboard_service.dart';
-import 'package:sas_akount_login/features/sales/sale_screen.dart';
-import 'package:sas_akount_login/shared/widgets/custom_drawer.dart';
-import 'package:sas_akount_login/features/purchase/purchase_screen.dart';
-import 'package:sas_akount_login/features/receivable/receivable_screen.dart';
-import 'package:sas_akount_login/features/payable/payable_screen.dart';
-import 'package:sas_akount_login/features/reports/outstanding_screen.dart';
-import 'package:sas_akount_login/core/services/sync_service.dart';
-import 'package:sas_akount_login/features/inventory/inventory_screen.dart';
-import 'package:sas_akount_login/features/reports/ageing_screen.dart';
-import 'package:sas_akount_login/features/sales/sales_entry_screen.dart';
-import 'package:sas_akount_login/features/purchase/purchase_entry_screen.dart';
-import 'package:sas_akount_login/features/banking/cash_bank_entry_screen.dart';
+import 'package:sas_app/services/dashboard/dashboard_service.dart';
+import 'package:sas_app/features/sales/sale_screen.dart';
+import 'package:sas_app/shared/widgets/custom_drawer.dart';
+import 'package:sas_app/features/purchase/purchase_screen.dart';
+import 'package:sas_app/features/receivable/receivable_screen.dart';
+import 'package:sas_app/features/payable/payable_screen.dart';
+import 'package:sas_app/features/reports/outstanding_screen.dart';
+import 'package:sas_app/core/services/sync_service.dart';
+import 'package:sas_app/features/inventory/inventory_screen.dart';
+import 'package:sas_app/features/reports/ageing_screen.dart';
+import 'package:sas_app/features/sales/sales_entry_screen.dart';
+import 'package:sas_app/features/purchase/purchase_entry_screen.dart';
+import 'package:sas_app/features/banking/cash_bank_entry_screen.dart';
 
 // ============================================================================
 // HOME PAGE

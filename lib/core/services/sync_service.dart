@@ -1,15 +1,15 @@
 import 'package:flutter/foundation.dart';
 
-import 'package:sas_akount_login/core/database/db_helper.dart';
-import 'package:sas_akount_login/core/state/global.dart';
+import 'package:sas_app/core/database/db_helper.dart';
+import 'package:sas_app/core/state/global.dart';
 
-import 'package:sas_akount_login/services/sales/sales_service.dart';
-import 'package:sas_akount_login/services/purchase/purchase_service.dart';
+import 'package:sas_app/services/sales/sales_service.dart';
+import 'package:sas_app/services/purchase/purchase_service.dart';
 
-import 'package:sas_akount_login/models/sales/sales.dart';
-import 'package:sas_akount_login/models/purchase/purchase.dart';
+import 'package:sas_app/models/sales/sales.dart';
+import 'package:sas_app/models/purchase/purchase.dart';
 
-import 'package:sas_akount_login/models/common/record_query.dart';
+import 'package:sas_app/models/common/record_query.dart';
 
 class SyncService {
   final SalesService _salesService;

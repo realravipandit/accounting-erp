@@ -7,11 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import 'package:sas_akount_login/services/auth/auth_service.dart';
-import 'package:sas_akount_login/core/database/db_helper.dart';
+import 'package:sas_app/services/auth/auth_service.dart';
+import 'package:sas_app/core/database/db_helper.dart';
 import 'register_screen.dart';
-import 'package:sas_akount_login/features/company/company_selection_screen.dart';
-import 'package:sas_akount_login/core/services/toast_service.dart'; // Update path if needed
+import 'package:sas_app/features/company/company_selection_screen.dart';
+import 'package:sas_app/core/services/toast_service.dart'; // Update path if needed
 
 final _storage = const FlutterSecureStorage();
 

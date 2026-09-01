@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:sas_akount_login/services/inventory/inventory_service.dart';
-import 'package:sas_akount_login/models/inventory/inventory.dart';
-import 'package:sas_akount_login/core/services/pdf_service.dart';
+import 'package:sas_app/services/inventory/inventory_service.dart';
+import 'package:sas_app/models/inventory/inventory.dart';
+import 'package:sas_app/core/services/pdf_service.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});

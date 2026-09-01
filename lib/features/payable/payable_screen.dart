@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:sas_akount_login/services/payable/payable_service.dart';
-import 'package:sas_akount_login/models/payable/payable.dart';
-import 'package:sas_akount_login/features/payable/payable_details_sheet.dart';
+import 'package:sas_app/services/payable/payable_service.dart';
+import 'package:sas_app/models/payable/payable.dart';
+import 'package:sas_app/features/payable/payable_details_sheet.dart';
 
 // --- PALETTE (shared with purchase_screen.dart / outstanding_screen.dart) --
 const _kInk = Color(0xFF15171C);

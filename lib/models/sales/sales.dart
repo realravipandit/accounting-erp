@@ -1,4 +1,4 @@
-﻿import 'package:sas_akount_login/models/inventory/item.dart';
+﻿import 'package:sas_app/models/inventory/item.dart';
 
 class Sales {
   final String? id;

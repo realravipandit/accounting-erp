@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nepali_date_picker/nepali_date_picker.dart';
-import 'package:sas_akount_login/core/network/api_service.dart';
-import 'package:sas_akount_login/services/banking/banking_service.dart';
+import 'package:sas_app/core/network/api_service.dart';
+import 'package:sas_app/services/banking/banking_service.dart';
 
 // PDF & Printing Imports
 import 'package:pdf/pdf.dart';

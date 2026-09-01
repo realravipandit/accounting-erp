@@ -1,7 +1,7 @@
 ﻿// // import 'package:flutter/material.dart';
-// // import 'package:sas_akount_login/core/state/global.dart';
-// // import 'package:sas_akount_login/models/purchase/purchase.dart';
-// // import 'package:sas_akount_login/models/sales/sales.dart';
+// // import 'package:sas_app/core/state/global.dart';
+// // import 'package:sas_app/models/purchase/purchase.dart';
+// // import 'package:sas_app/models/sales/sales.dart';
 
 // // class SearchScreen extends StatefulWidget {
 // //   const SearchScreen({super.key});
@@ -81,8 +81,8 @@
 // // }
 
 // import 'package:flutter/material.dart';
-// import 'package:sas_akount_login/core/state/global.dart';
-// import 'package:sas_akount_login/models/sales/sales.dart';
+// import 'package:sas_app/core/state/global.dart';
+// import 'package:sas_app/models/sales/sales.dart';
 
 // class SearchScreen extends StatefulWidget {
 //   const SearchScreen({super.key});
@@ -166,9 +166,9 @@
 // }
 
 import 'package:flutter/material.dart';
-import 'package:sas_akount_login/core/state/global.dart';
-import 'package:sas_akount_login/models/sales/sales.dart';
-// import 'package:sas_akount_login/models/purchase/purchase.dart';
+import 'package:sas_app/core/state/global.dart';
+import 'package:sas_app/models/sales/sales.dart';
+// import 'package:sas_app/models/purchase/purchase.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:sas_akount_login/services/inventory/inventory_service.dart';
+import 'package:sas_app/services/inventory/inventory_service.dart';
 import 'package:intl/intl.dart';
-import 'package:sas_akount_login/core/services/toast_service.dart';
+import 'package:sas_app/core/services/toast_service.dart';
 
 class ItemMasterScreen extends StatefulWidget {
   const ItemMasterScreen({super.key});

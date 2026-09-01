@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:sas_akount_login/core/services/pdf_service.dart';
-import 'package:sas_akount_login/features/purchase/purchase_screen.dart' show DateUtil;
+import 'package:sas_app/core/services/pdf_service.dart';
+import 'package:sas_app/features/purchase/purchase_screen.dart' show DateUtil;
 
 // --- PALETTE -------------------------------------------------------
 const _kInk = Color(0xFF15171C);

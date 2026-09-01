@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:sas_akount_login/services/receivable/receivable_service.dart';
-import 'package:sas_akount_login/models/receivable/outstanding.dart';
-import 'package:sas_akount_login/features/reports/outstanding_details_sheet.dart';
+import 'package:sas_app/services/receivable/receivable_service.dart';
+import 'package:sas_app/models/receivable/outstanding.dart';
+import 'package:sas_app/features/reports/outstanding_details_sheet.dart';
 
 // --- PALETTE (shared with sale_screen.dart / purchase_screen.dart) --
 const _kInk = Color(0xFF15171C);

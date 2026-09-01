@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sas_akount_login/models/payable/payable.dart';
-import 'package:sas_akount_login/core/services/pdf_service.dart';
+import 'package:sas_app/models/payable/payable.dart';
+import 'package:sas_app/core/services/pdf_service.dart';
 
 // ------------------------------------------------------------------
 // MODULAR FILE — self-contained. Only depends on Payable + PdfService,

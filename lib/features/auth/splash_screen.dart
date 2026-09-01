@@ -1,7 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:ui'; // Required for the glass blur effect
-import 'package:sas_akount_login/features/auth/login_screen.dart';
+import 'package:sas_app/features/auth/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});

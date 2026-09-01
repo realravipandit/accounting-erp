@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:sas_akount_login/services/ledger/ledger_service.dart';
-import 'package:sas_akount_login/core/services/toast_service.dart';
+import 'package:sas_app/services/ledger/ledger_service.dart';
+import 'package:sas_app/core/services/toast_service.dart';
 
 class LedgerMasterScreen extends StatefulWidget {
   const LedgerMasterScreen({super.key});

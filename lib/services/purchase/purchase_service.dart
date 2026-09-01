@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'package:sas_akount_login/core/network/api_service.dart';
-import 'package:sas_akount_login/models/common/record_query.dart';
+import 'package:sas_app/core/network/api_service.dart';
+import 'package:sas_app/models/common/record_query.dart';
 
 class PurchaseService {
   PurchaseService({

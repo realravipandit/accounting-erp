@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:sas_akount_login/services/purchase/purchase_service.dart';
-import 'package:sas_akount_login/services/sales/sales_service.dart';
+import 'package:sas_app/services/purchase/purchase_service.dart';
+import 'package:sas_app/services/sales/sales_service.dart';
 import 'package:intl/intl.dart';
 import 'package:nepali_date_picker/nepali_date_picker.dart';
-import 'package:sas_akount_login/features/sales/sales_entry_screen.dart';
+import 'package:sas_app/features/sales/sales_entry_screen.dart';
 class PurchaseEntryScreen extends StatefulWidget {
   const PurchaseEntryScreen({super.key});
   @override

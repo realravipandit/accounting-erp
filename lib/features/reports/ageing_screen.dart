@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:sas_akount_login/services/receivable/receivable_service.dart';
-import 'package:sas_akount_login/models/receivable/ageing.dart';
-import 'package:sas_akount_login/core/services/pdf_service.dart';
+import 'package:sas_app/services/receivable/receivable_service.dart';
+import 'package:sas_app/models/receivable/ageing.dart';
+import 'package:sas_app/core/services/pdf_service.dart';
 
 class AgeingScreen extends StatefulWidget {
   const AgeingScreen({super.key});

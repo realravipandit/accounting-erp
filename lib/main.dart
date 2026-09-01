@@ -4,13 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:sas_akount_login/features/dashboard/home_screen.dart';
-import 'package:sas_akount_login/features/auth/login_screen.dart';
-import 'package:sas_akount_login/features/auth/register_screen.dart';
-import 'package:sas_akount_login/features/sales/sale_screen.dart';
-import 'package:sas_akount_login/features/purchase/purchase_screen.dart';
-import 'package:sas_akount_login/features/search/search_screen.dart';
-import 'package:sas_akount_login/features/auth/splash_screen.dart';
+import 'package:sas_app/features/dashboard/home_screen.dart';
+import 'package:sas_app/features/auth/login_screen.dart';
+import 'package:sas_app/features/auth/register_screen.dart';
+import 'package:sas_app/features/sales/sale_screen.dart';
+import 'package:sas_app/features/purchase/purchase_screen.dart';
+import 'package:sas_app/features/search/search_screen.dart';
+import 'package:sas_app/features/auth/splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();

@@ -1,10 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:sas_akount_login/services/auth/auth_service.dart';
+import 'package:sas_app/services/auth/auth_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:sas_akount_login/features/dashboard/home_screen.dart';
-import 'package:sas_akount_login/features/auth/login_screen.dart';
+import 'package:sas_app/features/dashboard/home_screen.dart';
+import 'package:sas_app/features/auth/login_screen.dart';
 
 // --- Sunrise Theme Colors ---
 class SunriseTheme {

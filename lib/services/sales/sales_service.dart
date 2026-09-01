@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import '../../core/network/api_service.dart';
-import 'package:sas_akount_login/models/common/record_query.dart'; // Make sure this path is correct for your project!
+import 'package:sas_app/models/common/record_query.dart'; // Make sure this path is correct for your project!
 
 class SalesService {
   SalesService({

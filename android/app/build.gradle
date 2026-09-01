@@ -11,7 +11,7 @@ android {
     ndkVersion flutter.ndkVersion
 
     defaultConfig {
-        applicationId "com.example.sas_akount_login"
+        applicationId "com.smsoftech.sas_app"
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutter.versionCode

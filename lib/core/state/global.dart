@@ -1,5 +1,5 @@
-﻿import 'package:sas_akount_login/models/purchase/purchase.dart';
-import 'package:sas_akount_login/models/sales/sales.dart';
+﻿import 'package:sas_app/models/purchase/purchase.dart';
+import 'package:sas_app/models/sales/sales.dart';
 
 class Global {
   static List<Sales> sales = [];

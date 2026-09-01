@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:sas_akount_login/services/dashboard/dashboard_service.dart';
-import 'package:sas_akount_login/models/dashboard/home_summary.dart';
+import 'package:sas_app/services/dashboard/dashboard_service.dart';
+import 'package:sas_app/models/dashboard/home_summary.dart';
 
 class HomeProvider with ChangeNotifier {
   final DashboardService _apiService;
