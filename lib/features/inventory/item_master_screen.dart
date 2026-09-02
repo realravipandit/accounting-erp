@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:sas_app/services/inventory/inventory_service.dart';
 import 'package:intl/intl.dart';
@@ -22,17 +23,14 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   final _hssCodeController = TextEditingController();
   final _groupController = TextEditingController();
   final _subGroupController = TextEditingController();
-
   final _altQtyController = TextEditingController();
   final _qtyController = TextEditingController();
-
   final _buyPriceController = TextEditingController();
   final _salesPriceController = TextEditingController();
   final _mrpController = TextEditingController();
   final _tradePriceController = TextEditingController();
   final _mrRateController = TextEditingController();
   final _rateController = TextEditingController(text: '13.00');
-
   final _mfgDateController = TextEditingController();
   final _expDateController = TextEditingController();
 
@@ -54,20 +52,16 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   String _lastGeneratedPrefix = '';
   TextEditingController? _autoCompleteController;
 
+  // --- Live item-name search ---
+  List<Map<String, dynamic>> _itemSearchResults = [];
+  Timer? _searchDebounce;
+
   final List<String> _itemTypes = [
     'Inventory Item',
     'Service Item',
-    'Fixed Asset'
+    'Fixed Asset',
   ];
-
   final List<String> _vatOptions = ['Yes', 'No'];
-
-  final List<String> _existingItemNames = [
-    'Dl40 Chinese',
-    'J.S. Back Stool',
-    'Hydrolic',
-    'Wheel'
-  ];
 
   @override
   void initState() {
@@ -79,15 +73,9 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   Future<void> _fetchUnitsFromDb() async {
     try {
       final units = await _apiService.getUnits();
-
       final mappedUnits = units
-          .map(
-            (unit) => Map<String, dynamic>.from(
-              unit as Map,
-            ),
-          )
+          .map((unit) => Map<String, dynamic>.from(unit as Map))
           .toList();
-
       if (mounted) {
         setState(() {
           _availableUnits = mappedUnits;
@@ -101,15 +89,9 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   Future<void> _fetchGroupsFromDb() async {
     try {
       final groups = await _apiService.getItemGroups();
-
       final mappedGroups = groups
-          .map(
-            (group) => Map<String, dynamic>.from(
-              group as Map,
-            ),
-          )
+          .map((group) => Map<String, dynamic>.from(group as Map))
           .toList();
-
       if (mounted) {
         setState(() {
           _itemGroups = mappedGroups;
@@ -124,29 +106,29 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     setState(() {
       _selectedGroup = group;
       _groupController.text =
-          (group['GrpName'] ??
-                  group['grpName'] ??
-                  group['ItemGrpName'] ??
-                  '')
+          (group['GrpName'] ?? group['grpName'] ?? group['ItemGrpName'] ?? '')
               .toString();
-
       _selectedSubGroup = null;
       _subGroupController.clear();
       _itemSubGroups = [];
     });
 
+    final dynamic rawGroupId =
+        group['ItemGrpID'] ?? group['itemGrpID'];
+    final int? groupId = rawGroupId is int
+        ? rawGroupId
+        : int.tryParse(rawGroupId?.toString() ?? '');
+
+    if (groupId == null) {
+      debugPrint("API ERROR: Selected group has no valid ItemGrpID");
+      return;
+    }
+
     try {
-      // InventoryService.getItemSubGroups() currently accepts no arguments.
-      final subGroups = await _apiService.getItemSubGroups();
-
+      final subGroups = await _apiService.getItemSubGroups(groupId);
       final mappedSubGroups = subGroups
-          .map(
-            (subGroup) => Map<String, dynamic>.from(
-              subGroup as Map,
-            ),
-          )
+          .map((subGroup) => Map<String, dynamic>.from(subGroup as Map))
           .toList();
-
       if (mounted) {
         setState(() {
           _itemSubGroups = mappedSubGroups;
@@ -159,11 +141,8 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 
   Future<void> _generateItemCode(String prefix) async {
     setState(() => _itemCodeController.text = 'Loading...');
-
     try {
-      // InventoryService.getNextItemCode() currently accepts no arguments.
-      final code = await _apiService.getNextItemCode();
-
+      final code = await _apiService.getNextItemCode(prefix);
       if (mounted) {
         setState(() {
           _itemCodeController.text = code ?? '';
@@ -172,7 +151,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
       }
     } catch (e) {
       debugPrint("API ERROR: $e");
-
       if (mounted) {
         setState(() => _itemCodeController.text = '');
         ToastService.show(
@@ -184,8 +162,37 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     }
   }
 
+  // --- Live item-name search (debounced) ---
+  Future<void> _searchItems(String query) async {
+    if (query.trim().length < 2) {
+      if (mounted) {
+        setState(() => _itemSearchResults = []);
+      }
+      return;
+    }
+    try {
+      final results = await _apiService.searchItemNames(query.trim());
+      final mapped = results
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+      if (mounted) {
+        setState(() => _itemSearchResults = mapped);
+      }
+    } catch (e) {
+      debugPrint("API ERROR: Failed to search items: $e");
+    }
+  }
+
+  void _onItemNameChanged(String text) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      _searchItems(text);
+    });
+  }
+
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _itemNameController.dispose();
     _itemCodeController.dispose();
     _skuController.dispose();
@@ -215,7 +222,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-
     if (picked != null) {
       setState(() {
         controller.text = DateFormat('dd/MM/yyyy').format(picked);
@@ -225,7 +231,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 
   Future<void> _submitItem() async {
     FocusScope.of(context).unfocus();
-
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedUnitId == null) {
@@ -245,17 +250,12 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     try {
       if (_mfgDateController.text.isNotEmpty) {
         formattedMfgDate = DateFormat('yyyy-MM-dd').format(
-          DateFormat('dd/MM/yyyy').parse(
-            _mfgDateController.text,
-          ),
+          DateFormat('dd/MM/yyyy').parse(_mfgDateController.text),
         );
       }
-
       if (_expDateController.text.isNotEmpty) {
         formattedExpDate = DateFormat('yyyy-MM-dd').format(
-          DateFormat('dd/MM/yyyy').parse(
-            _expDateController.text,
-          ),
+          DateFormat('dd/MM/yyyy').parse(_expDateController.text),
         );
       }
     } catch (e) {
@@ -263,18 +263,14 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     }
 
     String dbItemType = 'PO';
-
     if (_selectedItemType == 'Service Item') {
       dbItemType = 'SV';
     }
-
     if (_selectedItemType == 'Fixed Asset') {
       dbItemType = 'FX';
     }
 
-    double parsedFactor =
-        double.tryParse(_qtyController.text.trim()) ?? 0.0;
-
+    double parsedFactor = double.tryParse(_qtyController.text.trim()) ?? 0.0;
     double parsedConversionRatio = _enableAltUnit
         ? (double.tryParse(_altQtyController.text.trim()) ?? 0.0)
         : 0.0;
@@ -285,47 +281,27 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
       'itemType': dbItemType,
       'itemsSKU': _skuController.text.trim(),
       'hssCode': _hssCodeController.text.trim(),
-
       'groupName': _groupController.text.trim(),
-      'ItemGrpID':
-          _selectedGroup?['ItemGrpID'] ??
-              _selectedGroup?['itemGrpID'],
-
+      'ItemGrpID': _selectedGroup?['ItemGrpID'] ?? _selectedGroup?['itemGrpID'],
       'subGroupName': _subGroupController.text.trim(),
       'ItemSubGrpID':
-          _selectedSubGroup?['ItemSubGrpID'] ??
-              _selectedSubGroup?['itemSubGrpID'],
-
+          _selectedSubGroup?['ItemSubGrpID'] ?? _selectedSubGroup?['itemSubGrpID'],
       'unitId': _selectedUnitId,
       'altUnitId': _enableAltUnit ? _selectedAltUnitId : null,
-
       // VALUATION HARDCODED HERE
       'valuationMethod': 'FIFO',
       'valuationTech': 'F',
-
       'ConversionRatio': parsedConversionRatio,
       'Factor': parsedFactor,
-
-      'buyRate':
-          double.tryParse(_buyPriceController.text) ?? 0.0,
-
-      'salesRate':
-          double.tryParse(_salesPriceController.text) ?? 0.0,
-
+      'buyRate': double.tryParse(_buyPriceController.text) ?? 0.0,
+      'salesRate': double.tryParse(_salesPriceController.text) ?? 0.0,
       'mrp': double.tryParse(_mrpController.text) ?? 0.0,
-
-      'tradePrice':
-          double.tryParse(_tradePriceController.text) ?? 0.0,
-
-      'mrRate':
-          double.tryParse(_mrRateController.text) ?? 0.0,
-
+      'tradePrice': double.tryParse(_tradePriceController.text) ?? 0.0,
+      'mrRate': double.tryParse(_mrRateController.text) ?? 0.0,
       'vatStatus': _vatStatus,
-
       'vatRate': _vatStatus == 'Yes'
           ? (double.tryParse(_rateController.text) ?? 13.0)
           : 0.0,
-
       'mfgDate': formattedMfgDate,
       'expiryDate': formattedExpDate,
       'itemLock': 'N',
@@ -334,14 +310,12 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 
     try {
       await _apiService.createItem(itemData);
-
       if (mounted) {
         ToastService.show(
           context,
           'Item created successfully!',
           isError: false,
         );
-
         _resetForm();
       }
     } catch (e) {
@@ -361,7 +335,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 
   void _resetForm() {
     _formKey.currentState!.reset();
-
     _itemNameController.clear();
     _itemCodeController.clear();
     _skuController.clear();
@@ -377,7 +350,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     _mrRateController.clear();
     _mfgDateController.clear();
     _expDateController.clear();
-
     setState(() {
       _selectedItemType = 'Inventory Item';
       _selectedUnitId = null;
@@ -389,21 +361,18 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
       _selectedGroup = null;
       _selectedSubGroup = null;
       _itemSubGroups = [];
+      _itemSearchResults = [];
     });
   }
 
   @override
   Widget build(BuildContext context) {
     String primaryUnitCode = '';
-
-    if (_selectedUnitId != null &&
-        _availableUnits.isNotEmpty) {
+    if (_selectedUnitId != null && _availableUnits.isNotEmpty) {
       try {
         primaryUnitCode = _availableUnits
                 .firstWhere(
-                  (u) =>
-                      (u['unitId'] ?? u['UnitID']) ==
-                      _selectedUnitId,
+                  (u) => (u['unitId'] ?? u['UnitID']) == _selectedUnitId,
                 )['unitCode']
                 ?.toString() ??
             '';
@@ -411,15 +380,11 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     }
 
     String altUnitCode = '';
-
-    if (_selectedAltUnitId != null &&
-        _availableUnits.isNotEmpty) {
+    if (_selectedAltUnitId != null && _availableUnits.isNotEmpty) {
       try {
         altUnitCode = _availableUnits
                 .firstWhere(
-                  (u) =>
-                      (u['unitId'] ?? u['UnitID']) ==
-                      _selectedAltUnitId,
+                  (u) => (u['unitId'] ?? u['UnitID']) == _selectedAltUnitId,
                 )['unitCode']
                 ?.toString() ??
             '';
@@ -445,29 +410,22 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
             children: [
               _buildSectionHeader('Basic Details'),
 
-              Autocomplete<String>(
-                optionsBuilder:
-                    (TextEditingValue textEditingValue) {
-                  if (textEditingValue.text.isEmpty) {
-                    return const Iterable<String>.empty();
+              // --- LIVE ITEM NAME SEARCH ---
+              Autocomplete<Map<String, dynamic>>(
+                displayStringForOption: (option) =>
+                    (option['ItemName'] ?? option['itemName'] ?? '')
+                        .toString(),
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text.trim().length < 2) {
+                    return const Iterable<Map<String, dynamic>>.empty();
                   }
-
-                  return _existingItemNames.where(
-                    (option) => option
-                        .toLowerCase()
-                        .contains(
-                          textEditingValue.text
-                              .toLowerCase(),
-                        ),
-                  );
+                  return _itemSearchResults;
                 },
-                onSelected: (String selection) {
-                  _itemNameController.text = selection;
-
-                  if (selection.length >= 2) {
-                    _generateItemCode(
-                      selection.substring(0, 2),
-                    );
+                onSelected: (Map<String, dynamic> selection) {
+                  final name = (selection['ItemName'] ?? '').toString();
+                  _itemNameController.text = name;
+                  if (name.length >= 2) {
+                    _generateItemCode(name.substring(0, 2));
                   }
                 },
                 fieldViewBuilder: (
@@ -478,24 +436,19 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                 ) {
                   if (_autoCompleteController != controller) {
                     _autoCompleteController = controller;
-
                     controller.addListener(() {
                       final text = controller.text.trim();
-
                       _itemNameController.text = text;
+                      _onItemNameChanged(text);
 
                       if (text.length >= 2) {
                         final prefix = text.substring(0, 2);
-
                         if (prefix.toLowerCase() !=
-                            _lastGeneratedPrefix
-                                .toLowerCase()) {
+                            _lastGeneratedPrefix.toLowerCase()) {
                           _generateItemCode(prefix);
                         }
                       } else if (text.length < 2) {
-                        if (_itemCodeController
-                            .text
-                            .isNotEmpty) {
+                        if (_itemCodeController.text.isNotEmpty) {
                           _itemCodeController.clear();
                           _lastGeneratedPrefix = '';
                         }
@@ -506,34 +459,23 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                   return TextFormField(
                     controller: controller,
                     focusNode: focusNode,
-                    onEditingComplete:
-                        onEditingComplete,
-                    textInputAction:
-                        TextInputAction.next,
-                    decoration: _inputDecoration(
-                      'Item Name (Live Search)',
-                    ),
-                    validator: (v) =>
-                        v!.isEmpty ? 'Required' : null,
+                    onEditingComplete: onEditingComplete,
+                    textInputAction: TextInputAction.next,
+                    decoration: _inputDecoration('Item Name (Live Search)'),
+                    validator: (v) => v!.isEmpty ? 'Required' : null,
                   );
                 },
               ),
-
               const SizedBox(height: 12),
 
               Row(
                 children: [
                   Expanded(
                     child: TextFormField(
-                      controller:
-                          _itemCodeController,
-                      decoration:
-                          _inputDecoration(
-                            'Item Code',
-                          ).copyWith(
-                            fillColor:
-                                Colors.grey[200],
-                          ),
+                      controller: _itemCodeController,
+                      decoration: _inputDecoration('Item Code').copyWith(
+                        fillColor: Colors.grey[200],
+                      ),
                       readOnly: true,
                     ),
                   ),
@@ -541,39 +483,26 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                   Expanded(
                     child: TextFormField(
                       controller: _skuController,
-                      textInputAction:
-                          TextInputAction.next,
-                      decoration:
-                          _inputDecoration(
-                        'Item S.K.U.',
-                      ),
+                      textInputAction: TextInputAction.next,
+                      decoration: _inputDecoration('Item S.K.U.'),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _hssCodeController,
-                textInputAction:
-                    TextInputAction.next,
-                decoration: _inputDecoration(
-                  'H.S.S Code',
-                ),
+                textInputAction: TextInputAction.next,
+                decoration: _inputDecoration('H.S.S Code'),
               ),
-
               const SizedBox(height: 12),
 
               // --- DYNAMIC GROUPS AND SUB GROUPS ---
               Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child:
-                        Autocomplete<
-                            Map<String, dynamic>>(
+                    child: Autocomplete<Map<String, dynamic>>(
                       displayStringForOption: (option) {
                         return (option['GrpName'] ??
                                 option['grpName'] ??
@@ -581,35 +510,22 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                                 '')
                             .toString();
                       },
-                      optionsBuilder:
-                          (TextEditingValue
-                              textEditingValue) {
-                        if (textEditingValue
-                            .text
-                            .isEmpty) {
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
                           return _itemGroups;
                         }
-
-                        return _itemGroups.where(
-                          (group) {
-                            final name =
-                                (group['GrpName'] ??
-                                        group['grpName'] ??
-                                        group['ItemGrpName'] ??
-                                        '')
-                                    .toString()
-                                    .toLowerCase();
-
-                            return name.contains(
-                              textEditingValue
-                                  .text
-                                  .toLowerCase(),
-                            );
-                          },
-                        );
+                        return _itemGroups.where((group) {
+                          final name = (group['GrpName'] ??
+                                  group['grpName'] ??
+                                  group['ItemGrpName'] ??
+                                  '')
+                              .toString()
+                              .toLowerCase();
+                          return name
+                              .contains(textEditingValue.text.toLowerCase());
+                        });
                       },
-                      onSelected:
-                          _onGroupSelected,
+                      onSelected: _onGroupSelected,
                       fieldViewBuilder: (
                         context,
                         controller,
@@ -617,52 +533,34 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                         onEditingComplete,
                       ) {
                         if (controller.text.isEmpty &&
-                            _groupController
-                                .text
-                                .isNotEmpty) {
-                          controller.text =
-                              _groupController.text;
+                            _groupController.text.isNotEmpty) {
+                          controller.text = _groupController.text;
                         }
-
                         return TextFormField(
                           controller: controller,
                           focusNode: focusNode,
-                          onEditingComplete:
-                              onEditingComplete,
-                          textInputAction:
-                              TextInputAction.next,
-                          decoration: _inputDecoration(
-                            'Item Group',
-                          ).copyWith(
-                            suffixIcon:
-                                IconButton(
-                              icon: const Icon(
-                                Icons.arrow_drop_down,
-                              ),
+                          onEditingComplete: onEditingComplete,
+                          textInputAction: TextInputAction.next,
+                          decoration: _inputDecoration('Item Group').copyWith(
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.arrow_drop_down),
                               onPressed: () {
                                 controller.clear();
-                                _groupController
-                                    .clear();
+                                _groupController.clear();
                                 focusNode.unfocus();
-
                                 Future.microtask(
-                                  () => focusNode
-                                      .requestFocus(),
+                                  () => focusNode.requestFocus(),
                                 );
                               },
                             ),
                           ),
                           onChanged: (value) {
-                            _groupController
-                                .text = value;
-
+                            _groupController.text = value;
                             if (value.isEmpty) {
                               setState(() {
                                 _selectedGroup = null;
-                                _selectedSubGroup =
-                                    null;
-                                _subGroupController
-                                    .clear();
+                                _selectedSubGroup = null;
+                                _subGroupController.clear();
                                 _itemSubGroups = [];
                               });
                             }
@@ -671,76 +569,44 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                       },
                     ),
                   ),
-
                   const SizedBox(width: 12),
-
                   Expanded(
-                    child:
-                        Autocomplete<
-                            Map<String, dynamic>>(
+                    child: Autocomplete<Map<String, dynamic>>(
                       displayStringForOption: (option) {
-                        return (option[
-                                    'ItemSubGrpName'] ??
-                                option[
-                                    'itemSubGrpName'] ??
+                        return (option['ItemSubGrpName'] ??
+                                option['itemSubGrpName'] ??
                                 option['SubGrpName'] ??
                                 option.values.last ??
                                 '')
                             .toString();
                       },
-                      optionsBuilder:
-                          (TextEditingValue
-                              textEditingValue) {
+                      optionsBuilder: (TextEditingValue textEditingValue) {
                         if (_selectedGroup == null) {
-                          return const Iterable<
-                              Map<String,
-                                  dynamic>>.empty();
+                          return const Iterable<Map<String, dynamic>>.empty();
                         }
-
-                        if (textEditingValue
-                            .text
-                            .isEmpty) {
+                        if (textEditingValue.text.isEmpty) {
                           return _itemSubGroups;
                         }
-
-                        return _itemSubGroups.where(
-                          (subGroup) {
-                            final name =
-                                (subGroup[
-                                            'ItemSubGrpName'] ??
-                                        subGroup[
-                                            'itemSubGrpName'] ??
-                                        subGroup[
-                                            'SubGrpName'] ??
-                                        '')
-                                    .toString()
-                                    .toLowerCase();
-
-                            return name.contains(
-                              textEditingValue
-                                  .text
-                                  .toLowerCase(),
-                            );
-                          },
-                        );
+                        return _itemSubGroups.where((subGroup) {
+                          final name = (subGroup['ItemSubGrpName'] ??
+                                  subGroup['itemSubGrpName'] ??
+                                  subGroup['SubGrpName'] ??
+                                  '')
+                              .toString()
+                              .toLowerCase();
+                          return name
+                              .contains(textEditingValue.text.toLowerCase());
+                        });
                       },
-                      onSelected: (
-                        Map<String, dynamic>
-                            selection,
-                      ) {
+                      onSelected: (Map<String, dynamic> selection) {
                         setState(() {
-                          _selectedSubGroup =
-                              selection;
-
-                          _subGroupController.text =
-                              (selection[
-                                          'ItemSubGrpName'] ??
-                                      selection[
-                                          'itemSubGrpName'] ??
-                                      selection[
-                                          'SubGrpName'] ??
-                                      '')
-                                  .toString();
+                          _selectedSubGroup = selection;
+                          _subGroupController.text = (selection[
+                                      'ItemSubGrpName'] ??
+                                  selection['itemSubGrpName'] ??
+                                  selection['SubGrpName'] ??
+                                  '')
+                              .toString();
                         });
                       },
                       fieldViewBuilder: (
@@ -750,74 +616,49 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                         onEditingComplete,
                       ) {
                         if (controller.text.isEmpty &&
-                            _subGroupController
-                                .text
-                                .isNotEmpty) {
-                          controller.text =
-                              _subGroupController.text;
+                            _subGroupController.text.isNotEmpty) {
+                          controller.text = _subGroupController.text;
                         }
-
                         return TextFormField(
                           controller: controller,
                           focusNode: focusNode,
-                          onEditingComplete:
-                              onEditingComplete,
-                          textInputAction:
-                              TextInputAction.next,
-                          enabled:
-                              _selectedGroup != null,
+                          onEditingComplete: onEditingComplete,
+                          textInputAction: TextInputAction.next,
+                          enabled: _selectedGroup != null,
                           decoration: _inputDecoration(
                             _selectedGroup == null
                                 ? 'Select Group First'
                                 : 'Item Sub Group',
                           ).copyWith(
-                            fillColor:
-                                _selectedGroup ==
-                                        null
-                                    ? Colors.grey[200]
-                                    : Colors.white,
-                            suffixIcon:
-                                IconButton(
-                              icon: const Icon(
-                                Icons.arrow_drop_down,
-                              ),
-                              onPressed:
-                                  _selectedGroup ==
-                                          null
-                                      ? null
-                                      : () {
-                                          controller
-                                              .clear();
-                                          _subGroupController
-                                              .clear();
-                                          focusNode
-                                              .unfocus();
-
-                                          Future
-                                              .microtask(
-                                            () => focusNode
-                                                .requestFocus(),
-                                          );
-                                        },
+                            fillColor: _selectedGroup == null
+                                ? Colors.grey[200]
+                                : Colors.white,
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.arrow_drop_down),
+                              onPressed: _selectedGroup == null
+                                  ? null
+                                  : () {
+                                      controller.clear();
+                                      _subGroupController.clear();
+                                      focusNode.unfocus();
+                                      Future.microtask(
+                                        () => focusNode.requestFocus(),
+                                      );
+                                    },
                             ),
                           ),
                           onChanged: (value) =>
-                              _subGroupController
-                                  .text = value,
+                              _subGroupController.text = value,
                         );
                       },
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               DropdownButtonFormField<String>(
                 initialValue: _selectedItemType,
-                decoration: _inputDecoration(
-                  'Item Type',
-                ),
+                decoration: _inputDecoration('Item Type'),
                 items: _itemTypes
                     .map(
                       (t) => DropdownMenuItem(
@@ -826,122 +667,73 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                       ),
                     )
                     .toList(),
-                onChanged: (v) => setState(
-                  () =>
-                      _selectedItemType = v!,
-                ),
+                onChanged: (v) => setState(() => _selectedItemType = v!),
               ),
-
               const SizedBox(height: 24),
-
-              _buildSectionHeader(
-                'Units & Quantities',
-              ),
+              _buildSectionHeader('Units & Quantities'),
 
               // Row 1: The Dropdowns
               Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child:
-                        DropdownButtonFormField<int>(
-                      initialValue:
-                          _selectedUnitId,
-                      decoration:
-                          _inputDecoration(
-                        'Primary Unit',
-                      ),
+                    child: DropdownButtonFormField<int>(
+                      initialValue: _selectedUnitId,
+                      decoration: _inputDecoration('Primary Unit'),
                       items: _availableUnits
                           .map(
-                            (u) =>
-                                DropdownMenuItem<
-                                    int>(
-                              value: (u[
-                                          'unitId'] ??
-                                      u['UnitID'])
-                                  as int,
+                            (u) => DropdownMenuItem<int>(
+                              value: (u['unitId'] ?? u['UnitID']) as int,
                               child: Text(
-                                (u['unitCode'] ??
-                                        u['UnitCode'] ??
-                                        '')
+                                (u['unitCode'] ?? u['UnitCode'] ?? '')
                                     .toString(),
                               ),
                             ),
                           )
                           .toList(),
-                      onChanged: (v) => setState(
-                        () => _selectedUnitId = v,
-                      ),
-                      validator: (v) =>
-                          v == null ? 'Required' : null,
+                      onChanged: (v) => setState(() => _selectedUnitId = v),
+                      validator: (v) => v == null ? 'Required' : null,
                     ),
                   ),
-
                   const SizedBox(width: 12),
-
                   Expanded(
                     child: Row(
                       children: [
                         Checkbox(
                           value: _enableAltUnit,
-                          onChanged: (v) =>
-                              setState(() {
+                          onChanged: (v) => setState(() {
                             _enableAltUnit = v!;
                             if (!v) {
-                              _selectedAltUnitId =
-                                  null;
+                              _selectedAltUnitId = null;
                               _qtyController.clear();
                               _altQtyController.clear();
                             }
                           }),
                         ),
                         Expanded(
-                          child:
-                              DropdownButtonFormField<
-                                  int>(
-                            initialValue:
-                                _selectedAltUnitId,
-                            decoration:
-                                _inputDecoration(
-                              'Alt Unit',
-                            ).copyWith(
-                              fillColor:
-                                  _enableAltUnit
-                                      ? Colors.white
-                                      : Colors.grey[200],
+                          child: DropdownButtonFormField<int>(
+                            initialValue: _selectedAltUnitId,
+                            decoration: _inputDecoration('Alt Unit').copyWith(
+                              fillColor: _enableAltUnit
+                                  ? Colors.white
+                                  : Colors.grey[200],
                             ),
                             items: _availableUnits
                                 .map(
-                                  (u) =>
-                                      DropdownMenuItem<
-                                          int>(
-                                    value: (u[
-                                                'unitId'] ??
-                                            u['UnitID'])
-                                        as int,
+                                  (u) => DropdownMenuItem<int>(
+                                    value:
+                                        (u['unitId'] ?? u['UnitID']) as int,
                                     child: Text(
-                                      (u[
-                                                  'unitCode'] ??
-                                              u[
-                                                  'UnitCode'] ??
-                                              '')
+                                      (u['unitCode'] ?? u['UnitCode'] ?? '')
                                           .toString(),
                                     ),
                                   ),
                                 )
                                 .toList(),
                             onChanged: _enableAltUnit
-                                ? (v) => setState(
-                                      () =>
-                                          _selectedAltUnitId =
-                                              v,
-                                    )
+                                ? (v) => setState(() => _selectedAltUnitId = v)
                                 : null,
-                            disabledHint:
-                                const Text(
-                              'Disabled',
-                            ),
+                            disabledHint: const Text('Disabled'),
                           ),
                         ),
                       ],
@@ -949,252 +741,152 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               // Row 2: The Text Fields
               Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: TextFormField(
-                      controller:
-                          _altQtyController,
-                      keyboardType:
-                          TextInputType.number,
-                      textInputAction:
-                          TextInputAction.next,
+                      controller: _altQtyController,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
                       enabled: _enableAltUnit,
-                      decoration:
-                          _inputDecoration(
-                        'Alt Qty',
-                      ).copyWith(
-                        fillColor: _enableAltUnit
-                            ? Colors.white
-                            : Colors.grey[200],
-                        suffixText:
-                            altUnitCode,
-                        suffixStyle:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight.bold,
-                          color:
-                              Colors.blueAccent,
+                      decoration: _inputDecoration('Alt Qty').copyWith(
+                        fillColor:
+                            _enableAltUnit ? Colors.white : Colors.grey[200],
+                        suffixText: altUnitCode,
+                        suffixStyle: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueAccent,
                         ),
                       ),
                     ),
                   ),
-
                   const Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12.0,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 12.0),
                     child: Text(
                       '=',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight:
-                            FontWeight.bold,
-                      ),
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                   ),
-
                   Expanded(
                     child: TextFormField(
                       controller: _qtyController,
-                      keyboardType:
-                          TextInputType.number,
-                      textInputAction:
-                          TextInputAction.next,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
                       enabled: _enableAltUnit,
-                      decoration:
-                          _inputDecoration(
-                        'Qty',
-                      ).copyWith(
-                        fillColor: _enableAltUnit
-                            ? Colors.white
-                            : Colors.grey[200],
-                        suffixText:
-                            primaryUnitCode,
-                        suffixStyle:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight.bold,
-                          color:
-                              Colors.blueAccent,
+                      decoration: _inputDecoration('Qty').copyWith(
+                        fillColor:
+                            _enableAltUnit ? Colors.white : Colors.grey[200],
+                        suffixText: primaryUnitCode,
+                        suffixStyle: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueAccent,
                         ),
                       ),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 24),
-
-              _buildSectionHeader(
-                'Pricing & Taxation',
-              ),
-
+              _buildSectionHeader('Pricing & Taxation'),
               Row(
                 children: [
                   Expanded(
                     child: TextFormField(
-                      controller:
-                          _buyPriceController,
-                      keyboardType:
-                          TextInputType.number,
-                      textInputAction:
-                          TextInputAction.next,
-                      decoration:
-                          _inputDecoration(
-                        'Buy Price',
-                      ),
+                      controller: _buyPriceController,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                      decoration: _inputDecoration('Buy Price'),
                     ),
                   ),
-
                   const SizedBox(width: 12),
-
                   Expanded(
                     child: TextFormField(
-                      controller:
-                          _salesPriceController,
-                      keyboardType:
-                          TextInputType.number,
-                      textInputAction:
-                          TextInputAction.next,
-                      decoration:
-                          _inputDecoration(
-                        'Sales Price',
-                      ),
+                      controller: _salesPriceController,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                      decoration: _inputDecoration('Sales Price'),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               Row(
                 children: [
                   Expanded(
                     child: TextFormField(
                       controller: _mrpController,
-                      keyboardType:
-                          TextInputType.number,
-                      textInputAction:
-                          TextInputAction.next,
-                      decoration:
-                          _inputDecoration(
-                        'M.R.P.',
-                      ),
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                      decoration: _inputDecoration('M.R.P.'),
                     ),
                   ),
-
                   const SizedBox(width: 12),
-
                   Expanded(
                     child: TextFormField(
-                      controller:
-                          _tradePriceController,
-                      keyboardType:
-                          TextInputType.number,
-                      textInputAction:
-                          TextInputAction.next,
-                      decoration:
-                          _inputDecoration(
-                        'Trade Price',
-                      ),
+                      controller: _tradePriceController,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                      decoration: _inputDecoration('Trade Price'),
                     ),
                   ),
-
                   const SizedBox(width: 12),
-
                   Expanded(
                     child: TextFormField(
-                      controller:
-                          _mrRateController,
-                      keyboardType:
-                          TextInputType.number,
-                      textInputAction:
-                          TextInputAction.next,
-                      decoration:
-                          _inputDecoration(
-                        'M.R. Rate',
-                      ),
+                      controller: _mrRateController,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                      decoration: _inputDecoration('M.R. Rate'),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               Row(
                 children: [
                   Expanded(
-                    child:
-                        DropdownButtonFormField<
-                            String>(
+                    child: DropdownButtonFormField<String>(
                       initialValue: _vatStatus,
-                      decoration:
-                          _inputDecoration(
-                        'VAT',
-                      ),
+                      decoration: _inputDecoration('VAT'),
                       items: _vatOptions
                           .map(
-                            (v) =>
-                                DropdownMenuItem(
+                            (v) => DropdownMenuItem(
                               value: v,
                               child: Text(v),
                             ),
                           )
                           .toList(),
-                      onChanged: (v) => setState(
-                        () => _vatStatus = v!,
-                      ),
+                      onChanged: (v) => setState(() => _vatStatus = v!),
                     ),
                   ),
-
                   const SizedBox(width: 12),
-
                   Expanded(
                     child: Row(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: TextFormField(
-                            controller:
-                                _rateController,
-                            keyboardType:
-                                TextInputType.number,
-                            textInputAction:
-                                TextInputAction.done,
-                            enabled:
-                                _vatStatus == 'Yes',
-                            decoration:
-                                _inputDecoration(
-                              'Rate',
-                            ).copyWith(
-                              fillColor:
-                                  _vatStatus ==
-                                          'Yes'
-                                      ? Colors.white
-                                      : Colors.grey[200],
+                            controller: _rateController,
+                            keyboardType: TextInputType.number,
+                            textInputAction: TextInputAction.done,
+                            enabled: _vatStatus == 'Yes',
+                            decoration: _inputDecoration('Rate').copyWith(
+                              fillColor: _vatStatus == 'Yes'
+                                  ? Colors.white
+                                  : Colors.grey[200],
                             ),
                           ),
                         ),
-
                         const Padding(
-                          padding:
-                              EdgeInsets.only(
-                            left: 8.0,
-                          ),
+                          padding: EdgeInsets.only(left: 8.0),
                           child: Text(
                             '%',
                             style: TextStyle(
                               fontSize: 18,
-                              fontWeight:
-                                  FontWeight.bold,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
@@ -1203,90 +895,52 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 24),
-
-              _buildSectionHeader(
-                'Manufacturing & Expiry',
-              ),
-
+              _buildSectionHeader('Manufacturing & Expiry'),
               Row(
                 children: [
                   Expanded(
                     child: TextFormField(
-                      controller:
-                          _mfgDateController,
+                      controller: _mfgDateController,
                       readOnly: true,
                       decoration:
-                          _inputDecoration(
-                        'Mfg Date (dd/mm/yyyy)',
-                      ).copyWith(
-                        suffixIcon:
-                            const Icon(
-                          Icons.calendar_month,
-                        ),
+                          _inputDecoration('Mfg Date (dd/mm/yyyy)').copyWith(
+                        suffixIcon: const Icon(Icons.calendar_month),
                       ),
-                      onTap: () =>
-                          _selectDate(
-                        context,
-                        _mfgDateController,
-                      ),
+                      onTap: () => _selectDate(context, _mfgDateController),
                     ),
                   ),
-
                   const SizedBox(width: 12),
-
                   Expanded(
                     child: TextFormField(
-                      controller:
-                          _expDateController,
+                      controller: _expDateController,
                       readOnly: true,
                       decoration:
-                          _inputDecoration(
-                        'Exp. Date (dd/mm/yyyy)',
-                      ).copyWith(
-                        suffixIcon:
-                            const Icon(
-                          Icons.calendar_month,
-                        ),
+                          _inputDecoration('Exp. Date (dd/mm/yyyy)').copyWith(
+                        suffixIcon: const Icon(Icons.calendar_month),
                       ),
-                      onTap: () =>
-                          _selectDate(
-                        context,
-                        _expDateController,
-                      ),
+                      onTap: () => _selectDate(context, _expDateController),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 40),
-
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  style:
-                      ElevatedButton.styleFrom(
-                    backgroundColor:
-                        const Color(0xFF0F172A),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        12,
-                      ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: _isLoading
-                      ? null
-                      : _submitItem,
+                  onPressed: _isLoading ? null : _submitItem,
                   child: _isLoading
                       ? const SizedBox(
                           width: 24,
                           height: 24,
-                          child:
-                              CircularProgressIndicator(
+                          child: CircularProgressIndicator(
                             color: Colors.white,
                             strokeWidth: 2,
                           ),
@@ -1295,14 +949,12 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                           'Save Item',
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight:
-                                FontWeight.bold,
+                            fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
                 ),
               ),
-
               const SizedBox(height: 40),
             ],
           ),
@@ -1311,14 +963,9 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     );
   }
 
-  Widget _buildSectionHeader(
-    String title,
-  ) {
+  Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(
-        bottom: 16.0,
-        top: 8.0,
-      ),
+      padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
       child: Text(
         title,
         style: const TextStyle(
@@ -1330,43 +977,28 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(
-    String label,
-  ) {
+  InputDecoration _inputDecoration(String label) {
     return InputDecoration(
       labelText: label,
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(
-          color: Colors.grey[300]!,
-        ),
+        borderSide: BorderSide(color: Colors.grey[300]!),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(
-          color: Colors.grey[300]!,
-        ),
+        borderSide: BorderSide(color: Colors.grey[300]!),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(
-          color: Colors.blueAccent,
-          width: 2,
-        ),
+        borderSide: const BorderSide(color: Colors.blueAccent, width: 2),
       ),
       disabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(
-          color: Colors.grey[200]!,
-        ),
+        borderSide: BorderSide(color: Colors.grey[200]!),
       ),
-      contentPadding:
-          const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 14,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 }
