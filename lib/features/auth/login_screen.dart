@@ -1,17 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui'; 
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:sas_app/services/auth/auth_service.dart';
 import 'package:sas_app/core/database/db_helper.dart';
-import 'register_screen.dart';
 import 'package:sas_app/features/company/company_selection_screen.dart';
-import 'package:sas_app/core/services/toast_service.dart'; // Update path if needed
+import 'package:sas_app/core/services/toast_service.dart';
 
 final _storage = const FlutterSecureStorage();
 
@@ -25,6 +24,9 @@ class LoginScreen extends StatefulWidget {
 }
 
 class LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+  // --- Configure your default IP / port here ---
+  static const String _kDefaultServerAddress = 'http://163.61.41.109:5000';
+
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _serverController = TextEditingController();
@@ -100,7 +102,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
 
   Future<void> _loadSavedData() async {
     final savedRememberMe = await _storage.read(key: 'remember_me');
-
     if (savedRememberMe == 'true') {
       final savedUsername = await _storage.read(key: 'saved_username');
       final savedPassword = await _storage.read(key: 'saved_password');
@@ -131,9 +132,10 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
         _lastKnownGoodServer = lastGood;
       });
 
-      if (_serverController.text.trim().isNotEmpty) {
-        _checkServer(_serverController.text, silent: true);
-      }
+      final toCheck = _serverController.text.trim().isNotEmpty
+          ? _serverController.text
+          : _kDefaultServerAddress;
+      _checkServer(toCheck, silent: true);
     }
   }
 
@@ -147,16 +149,13 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
   }
 
   Future<void> _checkServer(String rawInput, {bool silent = false}) async {
-    if (rawInput.trim().isEmpty) {
-      setState(() => _serverState = _ConnState.idle);
-      return;
-    }
+    final target = rawInput.trim().isEmpty ? _kDefaultServerAddress : rawInput.trim();
 
     if (!silent) {
       setState(() => _serverState = _ConnState.checking);
     }
 
-    final baseUrl = _normalizeServerAddress(rawInput);
+    final baseUrl = _normalizeServerAddress(target);
 
     try {
       final response = await http
@@ -205,7 +204,7 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     setState(() => _isLoading = true);
 
     final username = _usernameController.text.trim();
-    final password = _passwordController.text; // Now accepts blank
+    final password = _passwordController.text;
 
     if (username.isEmpty) {
       setState(() => _isLoading = false);
@@ -213,14 +212,11 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
       return;
     }
 
-    if (_serverController.text.trim().isEmpty) {
-      setState(() => _isLoading = false);
-      ToastService.showError(context, 'Please enter a server address');
-      return;
-    }
+    // Fallback: If empty, use the default IP address
+    final rawServer = _serverController.text.trim();
+    final serverToConnect = rawServer.isEmpty ? _kDefaultServerAddress : rawServer;
+    final baseUrl = _normalizeServerAddress(serverToConnect);
 
-    final baseUrl = _normalizeServerAddress(_serverController.text);
-    
     await _storage.write(key: _kActiveServerKey, value: baseUrl);
     await _storage.write(key: 'saved_central_db', value: _isAkountMaster.toString());
 
@@ -243,7 +239,6 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
         }
         await _storage.write(key: _kLastGoodServerKey, value: baseUrl);
 
-        // Optional: Show success toast right before navigating
         ToastService.showSuccess(context, 'Login successful!');
 
         Navigator.pushReplacement(
@@ -424,7 +419,7 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                     ),
                                   ),
                                   GestureDetector(
-                                    onTap: () {}, // TODO: Implement forgot password
+                                    onTap: () {},
                                     child: Text(
                                       'Forgot password?',
                                       style: TextStyle(
@@ -471,40 +466,36 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                             ],
                           ),
                         ),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 32),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              "Don't have an account? ",
-                              style: TextStyle(color: _textMain.withValues(alpha: 0.7), fontSize: 14),
+                            Icon(
+                              Icons.language_rounded,
+                              size: 15,
+                              color: _textMain.withValues(alpha: 0.65),
                             ),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                                );
-                              },
-                              child: Text(
-                                'Create one',
-                                style: TextStyle(
-                                  color: _textMain,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'www.smsoftech.com.np',
+                              style: TextStyle(
+                                color: _textMain.withValues(alpha: 0.75),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.2,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 6),
                         Text(
-                          'By signing in, you agree to our Terms of Service\nand Privacy Policy.',
+                          '© 2026 S.M. Softech Solutions Pvt. Ltd.\nAll rights reserved.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: _textMain.withValues(alpha: 0.5),
-                            fontSize: 12,
+                            fontSize: 11.5,
                             height: 1.5,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -562,8 +553,8 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
         onChanged: _onServerChanged,
         decoration: InputDecoration(
           isDense: true,
-          hintText: 'Server address',
-          hintStyle: TextStyle(color: _textMuted, fontSize: 14),
+          hintText: 'Server address (leave blank for default)',
+          hintStyle: TextStyle(color: _textMuted, fontSize: 13),
           prefixIcon: Icon(
             Icons.dns_rounded,
             color: isFocused ? _textMain : _textMuted,

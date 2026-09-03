@@ -1,6 +1,9 @@
-﻿import 'package:flutter/material.dart';
-import 'dart:async';
-import 'dart:ui'; // Required for the glass blur effect
+﻿import 'dart:async';
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import 'package:sas_app/features/auth/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -11,48 +14,90 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
-  late AnimationController _masterController;
-  late AnimationController _pulseController;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _pulseAnimation;
+  late AnimationController _entranceController;
+  late AnimationController _ambientController;
+  late AnimationController _shimmerController;
+
+  late Animation<double> _logoFade;
+  late Animation<double> _logoScale;
+  late Animation<double> _textFade;
+  late Animation<Offset> _textSlide;
+  late Animation<double> _pulseScale;
+
+  // Seamless gradient palette harmonious with the Sunrise Login Theme
+  static const Color _bgTop = Color(0xFF9BBDE2);
+  static const Color _bgMid = Color(0xFFD4E2DF);
+  static const Color _bgBottom = Color(0xFFF6E6CD);
+  static const Color _ink = Color(0xFF1A1B1C);
+  static const Color _muted = Color(0xFF6B6A66);
 
   @override
   void initState() {
     super.initState();
-    
-    // Controls the fade-in of the text
-    _masterController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
+
+    // 1. Entrance choreography
+    _entranceController = AnimationController(
       vsync: this,
+      duration: const Duration(milliseconds: 1400),
     );
 
-    // Controls the slow breathing effect of the background gradients
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 3000),
+    _logoFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.0, 0.65, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _logoScale = Tween<double>(begin: 0.88, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.0, 0.7, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _textFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.35, 0.9, curve: Curves.easeOut),
+      ),
+    );
+
+    _textSlide = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.35, 0.9, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    // 2. Ambient breathing spheres
+    _ambientController = AnimationController(
       vsync: this,
+      duration: const Duration(milliseconds: 3200),
     )..repeat(reverse: true);
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _masterController, curve: Curves.easeIn),
+    _pulseScale = Tween<double>(begin: 0.9, end: 1.15).animate(
+      CurvedAnimation(parent: _ambientController, curve: Curves.easeInOutSine),
     );
 
-    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOutSine),
-    );
+    // 3. Shimmer progress bar
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
 
-    _masterController.forward();
+    _entranceController.forward();
 
-    // 2-second hold before seamless transition
-    Timer(const Duration(milliseconds: 2000), () {
+    // Smooth navigation handoff to LoginScreen
+    Timer(const Duration(milliseconds: 2400), () {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          pageBuilder: (_, __, ___) => const LoginScreen(),
+          transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(opacity: animation, child: child);
           },
-          transitionDuration: const Duration(milliseconds: 800), 
+          transitionDuration: const Duration(milliseconds: 650),
         ),
       );
     });
@@ -60,130 +105,274 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
   @override
   void dispose() {
-    _masterController.dispose();
-    _pulseController.dispose();
+    _entranceController.dispose();
+    _ambientController.dispose();
+    _shimmerController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB), 
-      body: Stack(
-        children: [
-          // --- AURORA BACKGROUND LAYER ---
-          AnimatedBuilder(
-            animation: _pulseAnimation,
-            builder: (context, child) {
-              return Stack(
-                children: [
-                  // Top-left dark blue glow
-                  Positioned(
-                    top: -100,
-                    left: -100,
-                    child: Transform.scale(
-                      scale: _pulseAnimation.value,
-                      child: Container(
-                        width: 300,
-                        height: 300,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF1E3A8A), // Deep Corporate Blue
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Bottom-right vibrant blue glow
-                  Positioned(
-                    bottom: -150,
-                    right: -50,
-                    child: Transform.scale(
-                      scale: _pulseAnimation.value * 0.9,
-                      child: Container(
-                        width: 400,
-                        height: 400,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFF3B82F6).withValues(alpha: 0.6), // Vibrant Blue
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-          ),
-
-          // --- FROSTED GLASS LAYER ---
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        body: Stack(
+          children: [
+            // Atmospheric Base Gradient
+            Positioned.fill(
               child: Container(
-                color: const Color(0xFFF9FAFB).withValues(alpha: 0.7), 
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [_bgTop, _bgMid, _bgBottom],
+                    stops: [0.0, 0.5, 1.0],
+                  ),
+                ),
               ),
             ),
-          ),
 
-          // --- FOREGROUND LAYER ---
-          // Logo remains perfectly centered for the Hero flight
-          Center(
-            child: Hero(
-              tag: 'app_logo_animation', 
-              child: Image.asset(
-                'assets/images/logo.png',
-                height: 90, 
+            // Ambient Glowing Aurora Orbs
+            AnimatedBuilder(
+              animation: _pulseScale,
+              builder: (context, _) {
+                return Stack(
+                  children: [
+                    // Top-Left Soft Cerulean Glow
+                    Positioned(
+                      top: -120,
+                      left: -80,
+                      child: Transform.scale(
+                        scale: _pulseScale.value,
+                        child: Container(
+                          width: 380,
+                          height: 380,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF7FA9DE).withValues(alpha: 0.65),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Center-Right Warm Tangerine & Amber Radiance
+                    Positioned(
+                      top: MediaQuery.of(context).size.height * 0.35,
+                      right: -100,
+                      child: Transform.scale(
+                        scale: _pulseScale.value * 0.95,
+                        child: Container(
+                          width: 320,
+                          height: 320,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFFF0BD86).withValues(alpha: 0.45),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Bottom-Left Mint-Seafoam Pool
+                    Positioned(
+                      bottom: -80,
+                      left: -60,
+                      child: Transform.scale(
+                        scale: _pulseScale.value * 1.05,
+                        child: Container(
+                          width: 340,
+                          height: 340,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFFBCE3DC).withValues(alpha: 0.55),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+
+            // Ultra-Diffused Glass Frosting Layer
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 75, sigmaY: 75),
+                child: Container(
+                  color: Colors.white.withValues(alpha: 0.12),
+                ),
               ),
             ),
-          ),
-          
-          // Bottom Typography and Custom Loader
-          Positioned(
-            bottom: 60,
-            left: 0,
-            right: 0,
-            child: FadeTransition(
-              opacity: _fadeAnimation,
+
+            // Foreground Layout
+            SafeArea(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'SAS AKOUNT',
-                    style: TextStyle(
-                      color: Color(0xFF111827),
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 4.0, 
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'ENTERPRISE POS',
-                    style: TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 3.0,
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  
-                  // Sleek horizontal loading bar instead of the standard circle
-                  SizedBox(
-                    width: 120,
-                    height: 3,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: const LinearProgressIndicator(
-                        backgroundColor: Color(0xFFE5E7EB),
-                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1E3A8A)),
+                  const Spacer(flex: 3),
+
+                  // Hero App Emblem: Clean Floating Logo (No White Capsule/Card)
+                  Center(
+                    child: AnimatedBuilder(
+                      animation: _entranceController,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: _logoScale.value,
+                          child: Opacity(
+                            opacity: _logoFade.value,
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Hero(
+                        tag: 'app_logo_animation',
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          height: 84,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.layers_rounded,
+                            size: 80,
+                            color: _ink,
+                          ),
+                        ),
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 32),
+
+                  // Brand Typography
+                  FadeTransition(
+                    opacity: _textFade,
+                    child: SlideTransition(
+                      position: _textSlide,
+                      child: Column(
+                        children: [
+                          const Text(
+                            'SAS APP',
+                            style: TextStyle(
+                              color: _ink,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 4.5,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 18,
+                                height: 1,
+                                color: _muted.withValues(alpha: 0.4),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                child: Text(
+                                  'BUSINESS SOLUTIONS',
+                                  style: TextStyle(
+                                    color: _muted.withValues(alpha: 0.9),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 3.5,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                width: 18,
+                                height: 1,
+                                color: _muted.withValues(alpha: 0.4),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const Spacer(flex: 3),
+
+                  // Dynamic Micro Shimmer Progress Line
+                  FadeTransition(
+                    opacity: _textFade,
+                    child: AnimatedBuilder(
+                      animation: _shimmerController,
+                      builder: (context, _) {
+                        return Container(
+                          width: 120,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Stack(
+                              children: [
+                                Positioned(
+                                  left: -60 + (_shimmerController.value * 180),
+                                  top: 0,
+                                  bottom: 0,
+                                  width: 60,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.transparent,
+                                          _ink.withValues(alpha: 0.7),
+                                          Colors.transparent,
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // Company Attribution Footer
+                  FadeTransition(
+                    opacity: _textFade,
+                    child: Column(
+                      children: [
+                        Text(
+                          'S.M. SOFTECH SOLUTIONS',
+                          style: TextStyle(
+                            color: _ink.withValues(alpha: 0.65),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.8,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'v1.0.0 - BUSINESS EDITION',
+                          style: TextStyle(
+                            color: _muted.withValues(alpha: 0.55),
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
