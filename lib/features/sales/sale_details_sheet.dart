@@ -4,8 +4,8 @@ import 'package:sas_app/core/services/pdf_service.dart';
 import 'package:sas_app/core/services/pdf/pdf_generator_service.dart';
 import 'package:sas_app/utils/amount_to_words.dart';
 import 'package:sas_app/services/sales/sales_service.dart';
-import 'package:sas_app/shared/widgets/pdf_preview_screen.dart';
 import 'package:sas_app/services/sales/pos_sales_service.dart';
+import 'package:sas_app/shared/widgets/pdf_preview_screen.dart';
 // Note: Adjust the import below based on where you put DateUtil!
 import 'package:sas_app/features/sales/sale_screen.dart' show DateUtil;
 
@@ -64,12 +64,6 @@ class SaleDetailsSheet extends StatelessWidget {
 
   // Shared by both buttons: fetch the full record, resolve invoice type,
   // and build the transactionData map the PDF templates expect.
-  //
-  // Key names below match exactly what TaxSalesPdf.generate() /
-  // AbbrSalesPdf.generate() read (confirmed against their source) --- this
-  // replaces the previous version, which used the raw backend column names
-  // (VoucherID, NetAmount, totalAmount, etc.) that the templates never read,
-  // which was the root cause of the "missing data" bug.
   Future<({Map<String, dynamic> transactionData, String invoiceType, String voucherId})> _resolveInvoiceData() async {
     final voucherId = saleData['VoucherID']?.toString() ??
         saleData['invoiceNumber']?.toString() ??
@@ -89,8 +83,7 @@ class SaleDetailsSheet extends StatelessWidget {
       throw Exception('Could not determine invoice type for $voucherId.');
     }
 
-    // --- VAT term lookup (same Sign/Rate/Amount fields the totals
-    // breakdown above already reads off `terms`) ---
+    // --- VAT term lookup ---
     final vatTerm = terms.firstWhere(
       (t) => (t['Sign']?.toString() ?? t['sign']?.toString() ?? '') == '+',
       orElse: () => null,
@@ -107,10 +100,8 @@ class SaleDetailsSheet extends StatelessWidget {
     final double basicAmount = double.tryParse(master['BasicAmount']?.toString() ?? '0') ?? 0.0;
     final double taxableValue = invoiceType == 'tax' ? (netAmount - vatAmount) : 0.0;
 
-    // --- Items: reproduce the same tax back-out
-    // SalesEntryPosScreen._navigateToPdfPreview does at creation time, so
-    // historical Tax invoices show pre-tax rate/amount just like they did
-    // originally. Abbr/SB pass the raw inclusive amount through untouched.
+    // --- Items: redo the same tax back-out SalesEntryPosScreen does at
+    // creation time, and pass through the unit name too ---
     final List<Map<String, dynamic>> processedItems = [];
     for (int i = 0; i < rawItems.length; i++) {
       final raw = rawItems[i] as Map<String, dynamic>;
@@ -127,6 +118,7 @@ class SaleDetailsSheet extends StatelessWidget {
       processedItems.add({
         'sno': i + 1,
         'itemName': raw['productName']?.toString() ?? raw['ItemName']?.toString() ?? '',
+        'unit': raw['unit']?.toString() ?? raw['Unit']?.toString() ?? '',
         'qty': qty.toString(),
         'rate': rateBeforeTax.toStringAsFixed(2),
         'amount': taxAdjustedAmount.toStringAsFixed(2),
@@ -134,12 +126,12 @@ class SaleDetailsSheet extends StatelessWidget {
     }
 
     Map<String, dynamic> companyInfo = {};
-      try {
-        companyInfo = await PosSalesService().fetchActiveCompanyProfile();
-      } catch (_) {
-        // Falls back to templates' own 'GMART' placeholder if this fails —
-        // matches SalesEntryPosScreen's own error handling for this call.
-      }
+    try {
+      companyInfo = await PosSalesService().fetchActiveCompanyProfile();
+    } catch (_) {
+      // Falls back to templates' own 'GMART' placeholder if this fails —
+      // matches SalesEntryPosScreen's own error handling for this call.
+    }
 
     final transactionData = <String, dynamic>{
       'companyInfo': companyInfo,
@@ -244,7 +236,6 @@ class SaleDetailsSheet extends StatelessWidget {
     final timeStr = DateUtil.formatTime(saleData['VoucherTime']?.toString() ?? saleData['voucherTime']?.toString());
     final totalAmount = saleData['totalAmount']?.toString() ?? saleData['GrandTotal']?.toString() ?? '0.00';
     final List<dynamic> items = saleData['items'] is List ? saleData['items'] : [];
-    // Grab the new dynamic terms from the backend
     final List<dynamic> terms = saleData['terms'] is List ? saleData['terms'] : [];
     final status = _getStatus(saleData);
 
@@ -338,8 +329,8 @@ class SaleDetailsSheet extends StatelessWidget {
                             const SizedBox(height: 14),
                             const Row(
                               children: [
-                                Expanded(flex: 5, child: Text('ITEM', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.6))),
-                                SizedBox(width: 30, child: Text('QTY', textAlign: TextAlign.center, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.6))),
+                                Expanded(flex: 4, child: Text('ITEM', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.6))),
+                                SizedBox(width: 46, child: Text('QTY', textAlign: TextAlign.center, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.6))),
                                 Expanded(flex: 3, child: Text('RATE', textAlign: TextAlign.right, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.6))),
                                 SizedBox(width: 10),
                                 Expanded(flex: 3, child: Text('AMOUNT', textAlign: TextAlign.right, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.6))),
@@ -352,6 +343,8 @@ class SaleDetailsSheet extends StatelessWidget {
                               ...items.map((item) {
                                 final itemName = item['productName']?.toString() ?? item['ItemName']?.toString() ?? 'Unknown Item';
                                 final qty = item['Qty']?.toString() ?? '0';
+                                final unit = (item['unit'] ?? item['Unit'] ?? '').toString().trim();
+                                final qtyDisplay = unit.isNotEmpty ? '$qty $unit' : qty;
                                 final rate = item['Rate']?.toString() ?? '0.00';
                                 final amount = item['amount']?.toString() ?? item['NetAmount']?.toString() ?? '0.00';
                                 return Padding(
@@ -359,8 +352,8 @@ class SaleDetailsSheet extends StatelessWidget {
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Expanded(flex: 5, child: Text(itemName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText), maxLines: 2, overflow: TextOverflow.ellipsis)),
-                                      SizedBox(width: 30, child: Text(qty, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12.5, color: _kMuted))),
+                                      Expanded(flex: 4, child: Text(itemName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                                      SizedBox(width: 46, child: Text(qtyDisplay, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: _kMuted))),
                                       Expanded(flex: 3, child: Text(_formatCurrency(rate), textAlign: TextAlign.right, style: const TextStyle(fontSize: 12.5, color: _kMuted))),
                                       const SizedBox(width: 10),
                                       Expanded(flex: 3, child: Text(_formatCurrency(amount), textAlign: TextAlign.right, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _kInk))),

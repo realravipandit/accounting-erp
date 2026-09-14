@@ -11,7 +11,7 @@ import 'package:sas_app/services/auth/auth_service.dart';
 import 'package:sas_app/core/database/db_helper.dart';
 import 'package:sas_app/features/company/company_selection_screen.dart';
 import 'package:sas_app/core/services/toast_service.dart';
-import 'package:sas_app/core/config.dart';
+import 'package:sas_app/core/config/config.dart';
 
 
 final _storage = const FlutterSecureStorage();
