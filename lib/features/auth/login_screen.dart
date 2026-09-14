@@ -11,6 +11,8 @@ import 'package:sas_app/services/auth/auth_service.dart';
 import 'package:sas_app/core/database/db_helper.dart';
 import 'package:sas_app/features/company/company_selection_screen.dart';
 import 'package:sas_app/core/services/toast_service.dart';
+import 'package:sas_app/core/config.dart';
+
 
 final _storage = const FlutterSecureStorage();
 
@@ -25,7 +27,7 @@ class LoginScreen extends StatefulWidget {
 
 class LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   // --- Configure your default IP / port here ---
-  static const String _kDefaultServerAddress = 'http://163.61.41.109:5000';
+  static const String _kDefaultServerAddress = '163.61.41.109:5000';
 
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();

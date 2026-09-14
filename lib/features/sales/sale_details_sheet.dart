@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sas_app/core/services/pdf_service.dart';
+import 'package:sas_app/core/services/pdf/pdf_generator_service.dart';
+import 'package:sas_app/utils/amount_to_words.dart';
+import 'package:sas_app/services/sales/sales_service.dart';
+import 'package:sas_app/shared/widgets/pdf_preview_screen.dart';
+import 'package:sas_app/services/sales/pos_sales_service.dart';
 // Note: Adjust the import below based on where you put DateUtil!
 import 'package:sas_app/features/sales/sale_screen.dart' show DateUtil;
 
@@ -12,11 +17,10 @@ const _kBorder = Color(0xFFE7E9ED);
 const _kMuted = Color(0xFF8A8F9A);
 const _kText = Color(0xFF1E2025);
 
-// Sales accent — reserved for TOTAL, the export action, and copy
+// Sales accent --- reserved for TOTAL, the export action, and copy
 // affordances. Matches sale_screen.dart so list → detail feels like
 // one continuous screen.
 const _kSalesAccent = Color(0xFF0F6E56);
-
 const _kPaid = Color(0xFF1E8E5A);
 const _kPaidBg = Color(0xFFE6F5EE);
 const _kPending = Color(0xFFB8860B);
@@ -43,10 +47,132 @@ class SaleDetailsSheet extends StatelessWidget {
     return null;
   }
 
-  void _exportToPdf(BuildContext context) async {
+  // Maps the backend's resolved 'type' ('SB' | 'Tax' | 'Abbr' | 'Unknown')
+  // to the string PdfGeneratorService.generateInvoice expects.
+  String _mapInvoiceType(String? backendType) {
+    switch (backendType) {
+      case 'SB':
+        return 'normal';
+      case 'Tax':
+        return 'tax';
+      case 'Abbr':
+        return 'abbr';
+      default:
+        return ''; // signals unresolved type --- caller throws
+    }
+  }
+
+  // Shared by both buttons: fetch the full record, resolve invoice type,
+  // and build the transactionData map the PDF templates expect.
+  //
+  // Key names below match exactly what TaxSalesPdf.generate() /
+  // AbbrSalesPdf.generate() read (confirmed against their source) --- this
+  // replaces the previous version, which used the raw backend column names
+  // (VoucherID, NetAmount, totalAmount, etc.) that the templates never read,
+  // which was the root cause of the "missing data" bug.
+  Future<({Map<String, dynamic> transactionData, String invoiceType, String voucherId})> _resolveInvoiceData() async {
+    final voucherId = saleData['VoucherID']?.toString() ??
+        saleData['invoiceNumber']?.toString() ??
+        saleData['id']?.toString();
+
+    if (voucherId == null || voucherId.isEmpty) {
+      throw Exception('No voucher ID available for this record.');
+    }
+
+    final details = await SalesService().fetchSalesDetails(voucherId);
+    final master = details['master'] as Map<String, dynamic>? ?? {};
+    final rawItems = details['items'] is List ? details['items'] as List : [];
+    final terms = details['terms'] is List ? details['terms'] as List : [];
+
+    final invoiceType = _mapInvoiceType(master['type']?.toString());
+    if (invoiceType.isEmpty) {
+      throw Exception('Could not determine invoice type for $voucherId.');
+    }
+
+    // --- VAT term lookup (same Sign/Rate/Amount fields the totals
+    // breakdown above already reads off `terms`) ---
+    final vatTerm = terms.firstWhere(
+      (t) => (t['Sign']?.toString() ?? t['sign']?.toString() ?? '') == '+',
+      orElse: () => null,
+    );
+    final double vatRate = vatTerm != null
+        ? (double.tryParse(vatTerm['Rate']?.toString() ?? vatTerm['rate']?.toString() ?? '0') ?? 0.0)
+        : 0.0;
+    final double vatAmount = vatTerm != null
+        ? (double.tryParse(vatTerm['Amount']?.toString() ?? vatTerm['amount']?.toString() ?? '0') ?? 0.0)
+        : 0.0;
+    final double effectiveVatRate = vatRate > 0 ? vatRate : 13.0;
+
+    final double netAmount = double.tryParse(master['NetAmount']?.toString() ?? '0') ?? 0.0;
+    final double basicAmount = double.tryParse(master['BasicAmount']?.toString() ?? '0') ?? 0.0;
+    final double taxableValue = invoiceType == 'tax' ? (netAmount - vatAmount) : 0.0;
+
+    // --- Items: reproduce the same tax back-out
+    // SalesEntryPosScreen._navigateToPdfPreview does at creation time, so
+    // historical Tax invoices show pre-tax rate/amount just like they did
+    // originally. Abbr/SB pass the raw inclusive amount through untouched.
+    final List<Map<String, dynamic>> processedItems = [];
+    for (int i = 0; i < rawItems.length; i++) {
+      final raw = rawItems[i] as Map<String, dynamic>;
+      final double qty = double.tryParse(raw['Qty']?.toString() ?? '0') ?? 0.0;
+      final double lineAmount = double.tryParse(
+            raw['NetAmount']?.toString() ?? raw['amount']?.toString() ?? '0',
+          ) ??
+          0.0;
+      final double taxAdjustedAmount = (invoiceType == 'tax' && effectiveVatRate > 0)
+          ? lineAmount / (1 + (effectiveVatRate / 100))
+          : lineAmount;
+      final double rateBeforeTax = qty > 0 ? taxAdjustedAmount / qty : 0.0;
+
+      processedItems.add({
+        'sno': i + 1,
+        'itemName': raw['productName']?.toString() ?? raw['ItemName']?.toString() ?? '',
+        'qty': qty.toString(),
+        'rate': rateBeforeTax.toStringAsFixed(2),
+        'amount': taxAdjustedAmount.toStringAsFixed(2),
+      });
+    }
+
+    Map<String, dynamic> companyInfo = {};
+      try {
+        companyInfo = await PosSalesService().fetchActiveCompanyProfile();
+      } catch (_) {
+        // Falls back to templates' own 'GMART' placeholder if this fails —
+        // matches SalesEntryPosScreen's own error handling for this call.
+      }
+
+    final transactionData = <String, dynamic>{
+      'companyInfo': companyInfo,
+      'voucherId': master['VoucherID']?.toString() ?? voucherId,
+      'miti': master['VoucherMiti']?.toString() ?? '',
+      'time': DateUtil.formatTime(master['VoucherTime']?.toString()),
+      'customerName': master['PartyName']?.toString() ?? 'Cash Party',
+      'customerAddress': master['customerAddress']?.toString() ?? '',
+      'counter': master['counterName']?.toString() ?? master['ClassID']?.toString() ?? '',
+      'cashier': master['PrintedBy']?.toString() ?? '',
+      // Hardcoded at creation time too (SalesEntryPosScreen never reads a
+      // payment-mode column) --- confirmed correct, not a gap.
+      'paymentMode': 'Cash',
+      'basicAmount': basicAmount.toStringAsFixed(2),
+      'netAmount': netAmount.toStringAsFixed(2),
+      'tenderAmount': (double.tryParse(master['TenderAmount']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2),
+      'returnAmount': (double.tryParse(master['ReturnAmount']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2),
+      'remarks': master['Remarks']?.toString() ?? '',
+      'items': processedItems,
+      'amountInWords': 'Rs. ${AmountToWords.convert(netAmount.toInt())} only',
+      'printStatus': 'Original',
+      'taxExemptedValue': '0.00',
+      'taxableValue': taxableValue.toStringAsFixed(2),
+      'vatAmount': vatAmount.toStringAsFixed(2),
+    };
+
+    return (transactionData: transactionData, invoiceType: invoiceType, voucherId: voucherId);
+  }
+
+  void _previewPdf(BuildContext context) async {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Generating PDF…'),
+        content: const Text('Preparing preview...'),
         duration: const Duration(seconds: 1),
         behavior: SnackBarBehavior.floating,
         backgroundColor: _kSalesAccent,
@@ -55,33 +181,46 @@ class SaleDetailsSheet extends StatelessWidget {
     );
 
     try {
-      final customerName = (saleData['customerName'] ?? saleData['LedgerName'] ?? 'Unknown Customer').toString().replaceAll('\n', ' ').trim();
-      final invoiceNo = saleData['invoiceNumber']?.toString() ?? saleData['VoucherID']?.toString() ?? 'N/A';
-      final dateStr = DateUtil.formatDate(saleData['VoucherDate']?.toString());
-      final totalAmount = saleData['totalAmount']?.toString() ?? saleData['GrandTotal']?.toString() ?? '0.00';
+      final resolved = await _resolveInvoiceData();
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PdfPreviewScreen(
+              transactionData: resolved.transactionData,
+              invoiceType: resolved.invoiceType,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate preview: $e'),
+            backgroundColor: _kOverdue,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
 
-      final List<dynamic> items = saleData['items'] is List ? saleData['items'] : [];
-      final List<List<String>> tableData = items.map((item) {
-        final itemName = item['productName']?.toString() ?? item['ItemName']?.toString() ?? 'N/A';
-        final qty = item['Qty']?.toString() ?? '0';
-        final rate = item['Rate']?.toString() ?? '0.00';
-        final amt = item['amount']?.toString() ?? item['NetAmount']?.toString() ?? '0.00';
-        return [itemName, qty, 'Rs. ${_formatCurrency(rate)}', 'Rs. ${_formatCurrency(amt)}'];
-      }).toList();
+  void _exportToPdf(BuildContext context) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Generating PDF...'),
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: _kSalesAccent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
 
-      await PdfService.generateAndShareGenericDocument(
-        documentTitle: 'Sales Invoice',
-        entityLabel: 'Customer:',
-        entityName: customerName,
-        referenceLabel: 'Invoice No:',
-        referenceNumber: invoiceNo,
-        dateLabel: 'Date:',
-        dateValue: dateStr,
-        tableHeaders: const ['Product', 'Quantity', 'Rate', 'Amount'],
-        tableData: tableData,
-        totalAmount: _formatCurrency(totalAmount),
-      );
-
+    try {
+      final resolved = await _resolveInvoiceData();
+      final bytes = await PdfGeneratorService.generateInvoice(resolved.transactionData, resolved.invoiceType);
+      await PdfService.sharePdfBytes(bytes, fileName: '${resolved.voucherId}.pdf');
       if (context.mounted) Navigator.pop(context);
     } catch (e) {
       if (context.mounted) {
@@ -101,16 +240,12 @@ class SaleDetailsSheet extends StatelessWidget {
     final customerName = (saleData['customerName'] ?? saleData['LedgerName'] ?? 'Unknown Customer').toString().replaceAll('\n', ' ').trim();
     final invoiceNo = saleData['invoiceNumber']?.toString() ?? saleData['VoucherID']?.toString() ?? 'N/A';
     final remarks = saleData['remarks']?.toString() ?? saleData['narration']?.toString();
-
     final dateStr = DateUtil.formatDate(saleData['VoucherDate']?.toString() ?? saleData['voucherDate']?.toString());
     final timeStr = DateUtil.formatTime(saleData['VoucherTime']?.toString() ?? saleData['voucherTime']?.toString());
-
     final totalAmount = saleData['totalAmount']?.toString() ?? saleData['GrandTotal']?.toString() ?? '0.00';
-
     final List<dynamic> items = saleData['items'] is List ? saleData['items'] : [];
     // Grab the new dynamic terms from the backend
     final List<dynamic> terms = saleData['terms'] is List ? saleData['terms'] : [];
-
     final status = _getStatus(saleData);
 
     double subtotal = 0;
@@ -118,7 +253,6 @@ class SaleDetailsSheet extends StatelessWidget {
       final raw = item['amount'] ?? item['NetAmount'] ?? 0;
       subtotal += double.tryParse(raw.toString()) ?? 0;
     }
-
     final double total = double.tryParse(totalAmount) ?? subtotal;
 
     return DraggableScrollableSheet(
@@ -135,7 +269,6 @@ class SaleDetailsSheet extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
                 child: Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: _kBorder, borderRadius: BorderRadius.circular(10)))),
               ),
-
               // CLOSE BUTTON
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -154,7 +287,6 @@ class SaleDetailsSheet extends StatelessWidget {
                   ],
                 ),
               ),
-
               // RECEIPT BODY
               Expanded(
                 child: ListView(
@@ -188,28 +320,22 @@ class SaleDetailsSheet extends StatelessWidget {
                                   ),
                               ],
                             ),
-
                             const SizedBox(height: 8),
-
                             SizedBox(
                               width: double.infinity,
                               child: Text(customerName, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18.5, fontWeight: FontWeight.w800, color: _kInk, letterSpacing: -0.2, height: 1.25)),
                             ),
-
                             const SizedBox(height: 16),
                             const _DashedLine(),
                             const SizedBox(height: 14),
-
                             _CopyableMetaRow(label: 'Invoice No.', value: invoiceNo),
                             const SizedBox(height: 6),
                             Row(children: [const SizedBox(width: 80, child: Text('Date', style: TextStyle(fontSize: 12.5, color: _kMuted))), Expanded(child: Text(timeStr.isNotEmpty ? '$dateStr  $timeStr' : dateStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)))]),
                             const SizedBox(height: 6),
                             Row(children: [const SizedBox(width: 80, child: Text('Items', style: TextStyle(fontSize: 12.5, color: _kMuted))), Expanded(child: Text('${items.length}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)))]),
-
                             const SizedBox(height: 14),
                             const _DashedLine(),
                             const SizedBox(height: 14),
-
                             const Row(
                               children: [
                                 Expanded(flex: 5, child: Text('ITEM', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.6))),
@@ -220,7 +346,6 @@ class SaleDetailsSheet extends StatelessWidget {
                               ],
                             ),
                             const SizedBox(height: 10),
-
                             if (items.isEmpty)
                               const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Center(child: Text('No line items recorded', style: TextStyle(color: _kMuted, fontSize: 13))))
                             else
@@ -229,7 +354,6 @@ class SaleDetailsSheet extends StatelessWidget {
                                 final qty = item['Qty']?.toString() ?? '0';
                                 final rate = item['Rate']?.toString() ?? '0.00';
                                 final amount = item['amount']?.toString() ?? item['NetAmount']?.toString() ?? '0.00';
-
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 10),
                                   child: Row(
@@ -244,32 +368,24 @@ class SaleDetailsSheet extends StatelessWidget {
                                   ),
                                 );
                               }),
-
                             const SizedBox(height: 8),
                             const _DashedLine(),
                             const SizedBox(height: 14),
-
                             // --- DYNAMIC TOTALS BREAKDOWN ---
                             _TotalsRow(label: 'Subtotal', value: 'Rs. ${_formatCurrency(subtotal.toString())}'),
                             const SizedBox(height: 6),
-
                             if (terms.isNotEmpty)
                               ...terms.map((t) {
                                 final tName = t['TermName']?.toString() ?? t['termName']?.toString() ?? 'Adjustment';
                                 final tRate = double.tryParse(t['Rate']?.toString() ?? t['rate']?.toString() ?? '0') ?? 0.0;
                                 final tAmt = double.tryParse(t['Amount']?.toString() ?? t['amount']?.toString() ?? '0') ?? 0.0;
                                 final sign = t['Sign']?.toString() ?? t['sign']?.toString() ?? '+';
-
                                 if (tAmt == 0) return const SizedBox.shrink();
-
-                                // If Rate > 0, append it to the name i.e. "VAT (13%)"
                                 String displayLabel = tName;
                                 if (tRate > 0) {
-                                  // Drop the '.0' if it's a whole number like 13.0
                                   String rateStr = tRate == tRate.truncateToDouble() ? tRate.toInt().toString() : tRate.toString();
                                   displayLabel = '$tName ($rateStr%)';
                                 }
-
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 6),
                                   child: _TotalsRow(
@@ -278,7 +394,6 @@ class SaleDetailsSheet extends StatelessWidget {
                                   ),
                                 );
                               }),
-
                             const SizedBox(height: 10),
                             const _DashedLine(),
                             const SizedBox(height: 10),
@@ -286,11 +401,9 @@ class SaleDetailsSheet extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text('TOTAL', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kInk, letterSpacing: 0.5)),
-                                // TOTAL amount tinted emerald — this is money in, matches the summary strip on the list screen.
                                 Text('Rs. ${_formatCurrency(total.toString())}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _kSalesAccent)),
                               ],
                             ),
-
                             if (remarks != null && remarks.isNotEmpty) ...[
                               const SizedBox(height: 24),
                               Container(
@@ -306,11 +419,9 @@ class SaleDetailsSheet extends StatelessWidget {
                                 ),
                               ),
                             ],
-
                             const SizedBox(height: 24),
                             const _DashedLine(),
                             const SizedBox(height: 16),
-
                             const Center(child: Text('Thank you for your business', style: TextStyle(fontSize: 11, color: _kMuted, fontStyle: FontStyle.italic))),
                           ],
                         ),
@@ -319,7 +430,6 @@ class SaleDetailsSheet extends StatelessWidget {
                   ],
                 ),
               ),
-
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                 decoration: const BoxDecoration(color: _kBg),
@@ -328,11 +438,30 @@ class SaleDetailsSheet extends StatelessWidget {
                   child: SizedBox(
                     width: double.infinity,
                     height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _exportToPdf(context),
-                      icon: const Icon(Icons.picture_as_pdf_rounded, size: 19),
-                      label: const Text('Export PDF & Share', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
-                      style: ElevatedButton.styleFrom(backgroundColor: _kSalesAccent, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _previewPdf(context),
+                            icon: const Icon(Icons.visibility_outlined, size: 19),
+                            label: const Text('Preview', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _kSalesAccent,
+                              side: const BorderSide(color: _kSalesAccent),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => _exportToPdf(context),
+                            icon: const Icon(Icons.picture_as_pdf_rounded, size: 19),
+                            label: const Text('Export PDF & Share', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+                            style: ElevatedButton.styleFrom(backgroundColor: _kSalesAccent, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -349,6 +478,7 @@ class SaleDetailsSheet extends StatelessWidget {
 class _CopyableMetaRow extends StatelessWidget {
   final String label;
   final String value;
+
   const _CopyableMetaRow({required this.label, required this.value});
 
   @override
@@ -380,6 +510,7 @@ class _CopyableMetaRow extends StatelessWidget {
 class _TotalsRow extends StatelessWidget {
   final String label;
   final String value;
+
   const _TotalsRow({required this.label, required this.value});
 
   @override
@@ -422,6 +553,7 @@ class _DashedLinePainter extends CustomPainter {
       startX += dashWidth + dashSpace;
     }
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -444,6 +576,7 @@ class _ReceiptClipper extends CustomClipper<Path> {
     path.close();
     return path;
   }
+
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

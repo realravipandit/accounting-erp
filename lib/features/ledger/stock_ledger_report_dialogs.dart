@@ -501,7 +501,7 @@ class _PrimaryButton extends StatelessWidget {
   final VoidCallback onTap;
   final bool enabled;
 
-  const _PrimaryButton({required this.label, required this.onTap, this.enabled = true});
+  const _PrimaryButton({required this.label, required this.onTap}) : enabled = true;
 
   @override
   Widget build(BuildContext context) {

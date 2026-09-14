@@ -62,6 +62,11 @@
       setState(() => _isLoading = true);
       try {
         final response = await SalesService().fetchSales(_currentQuery);
+        debugPrint("=== RAW SALES RESPONSE ===");
+        for (final r in (response['data'] ?? [])) {
+          debugPrint(r.toString());
+          debugPrint('---');
+        }
         if (mounted) {
           setState(() {
             _sales = response['data'] ?? [];

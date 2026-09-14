@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -10,7 +12,6 @@ import 'package:intl/intl.dart';
 class PdfService {
   static Future<File> generateInvoice(Sales sale) async {
     final pdf = pw.Document();
-
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -43,7 +44,6 @@ class PdfService {
 
   static Future<File> generatePurchaseInvoice(Purchase purchase) async {
     final pdf = pw.Document();
-
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -312,19 +312,18 @@ class PdfService {
   // Use this for Sales, Purchases, Payables, Receivables, etc.
   // =========================================================================
   static Future<void> generateAndShareGenericDocument({
-    required String documentTitle,    // e.g., "Purchase Invoice" or "Sales Receipt"
-    required String entityLabel,      // e.g., "Supplier:" or "Customer:"
-    required String entityName,       // e.g., "ABC Traders"
-    required String referenceLabel,   // e.g., "Bill No:" or "Invoice No:"
-    required String referenceNumber,  // e.g., "INV-1002"
-    required String dateLabel,        // e.g., "Date:"
-    required String dateValue,        // e.g., "2024-05-12"
-    required List<String> tableHeaders, // e.g., ['Product', 'Qty', 'Rate', 'Total']
-    required List<List<String>> tableData, // The mapped rows
-    required String totalAmount,      // e.g., "1,500.00"
+    required String documentTitle,
+    required String entityLabel,
+    required String entityName,
+    required String referenceLabel,
+    required String referenceNumber,
+    required String dateLabel,
+    required String dateValue,
+    required List<String> tableHeaders,
+    required List<List<String>> tableData,
+    required String totalAmount,
   }) async {
     final pdf = pw.Document();
-
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -332,15 +331,12 @@ class PdfService {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // --- Title ---
               pw.Header(
                 level: 0,
                 child: pw.Text('SAS Akount - $documentTitle',
                     style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
               ),
               pw.SizedBox(height: 20),
-              
-              // --- Header Info (Entity, Ref, Date) ---
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
@@ -350,20 +346,18 @@ class PdfService {
                       pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text('$entityLabel $entityName', style: const pw.TextStyle(fontSize: 16)),
-                          pw.Text('$referenceLabel $referenceNumber', style: const pw.TextStyle(fontSize: 16)),
-                          pw.Text('$dateLabel $dateValue', style: const pw.TextStyle(fontSize: 16)),
+                          pw.Text('$entityLabel  $entityName', style: const pw.TextStyle(fontSize: 16)),
+                          pw.Text('$referenceLabel  $referenceNumber', style: const pw.TextStyle(fontSize: 16)),
+                          pw.Text('$dateLabel  $dateValue', style: const pw.TextStyle(fontSize: 16)),
                         ],
                       ),
-                      pw.Container(height: 80, width: 80, child: pw.FlutterLogo()), // Replace with your company logo if needed
+                      pw.Container(height: 80, width: 80, child: pw.FlutterLogo()),
                     ],
                   ),
                   pw.Divider(),
                 ],
               ),
               pw.SizedBox(height: 30),
-
-              // --- Dynamic Table ---
               pw.Table.fromTextArray(
                 headers: tableHeaders,
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14),
@@ -373,8 +367,6 @@ class PdfService {
                 data: tableData,
               ),
               pw.SizedBox(height: 30),
-
-              // --- Totals ---
               pw.Align(
                 alignment: pw.Alignment.centerRight,
                 child: pw.Container(
@@ -401,13 +393,23 @@ class PdfService {
       ),
     );
 
-    // Save and Share
     final bytes = await pdf.save();
     final dir = await getTemporaryDirectory();
     final safeFileName = '${documentTitle.replaceAll(' ', '_')}_$referenceNumber.pdf';
     final file = File('${dir.path}/$safeFileName');
     await file.writeAsBytes(bytes);
-    
     await Share.shareXFiles([XFile(file.path)], text: '$documentTitle - $referenceNumber');
+  }
+
+  // =========================================================================
+  // Share raw PDF bytes — used for invoices built by PdfGeneratorService
+  // (Tax / Abbr / Normal Sale templates), which return Uint8List directly
+  // rather than a File.
+  // =========================================================================
+  static Future<void> sharePdfBytes(Uint8List bytes, {required String fileName}) async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
+    await file.writeAsBytes(bytes);
+    await Share.shareXFiles([XFile(file.path)]);
   }
 }

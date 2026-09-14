@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.4.0
+  mobile_scanner: ^6.0.7
   nepali_date_picker: ^7.0.1
   nepali_utils: ^3.0.8
   share_plus: ^12.0.0

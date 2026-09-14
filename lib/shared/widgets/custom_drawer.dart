@@ -1,7 +1,7 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:sas_app/core/services/toast_service.dart';
 import 'package:sas_app/features/banking/cash_bank_entry_screen.dart';
 import 'package:sas_app/features/ledger/stock_ledger_report_screen.dart';
-
 import 'package:sas_app/features/sales/sale_screen.dart';
 import 'package:sas_app/features/purchase/purchase_screen.dart';
 import 'package:sas_app/features/receivable/receivable_screen.dart';
@@ -12,6 +12,7 @@ import 'package:sas_app/features/company/company_selection_screen.dart';
 import 'package:sas_app/features/ledger/ledger_master_screen.dart';
 import 'package:sas_app/features/inventory/item_master_screen.dart';
 import 'package:sas_app/features/sales/sales_entry_screen.dart';
+import 'package:sas_app/features/sales/sales_entry_pos_screen.dart'; // 👈 NEW --- adjust path/class name to your actual POS screen
 import 'package:sas_app/features/purchase/purchase_entry_screen.dart';
 import 'package:sas_app/features/sales/sales_order_entry_screen.dart';
 import 'package:sas_app/features/ledger/ledger_report_screen.dart';
@@ -49,14 +50,12 @@ class CustomDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            
             // --- SCROLLABLE CONTENT ---
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                physics: const BouncingScrollPhysics(), 
+                physics: const BouncingScrollPhysics(),
                 children: <Widget>[
-                  
                   // --- SWITCH COMPANY CARD ---
                   Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -85,13 +84,13 @@ class CustomDrawer extends StatelessWidget {
                           child: const Icon(Icons.swap_horiz, color: Color(0xFF1E3A8A)),
                         ),
                         title: const Text(
-                          'Switch Company', 
+                          'Switch Company',
                           style: TextStyle(color: Color(0xFF1E3A8A), fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                         subtitle: const Text('Tap to change active workspace', style: TextStyle(color: Colors.grey, fontSize: 12)),
                         trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF1E3A8A)),
                         onTap: () {
-                          Navigator.pop(context); 
+                          Navigator.pop(context);
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => const CompanySelectionScreen()),
@@ -100,7 +99,6 @@ class CustomDrawer extends StatelessWidget {
                       ),
                     ),
                   ),
-
                   // --- SECTION 1: CORE MODULES ---
                   const Padding(
                     padding: EdgeInsets.only(left: 8, bottom: 8),
@@ -109,7 +107,6 @@ class CustomDrawer extends StatelessWidget {
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.1),
                     ),
                   ),
-                  
                   // Chart of Account (Ledger Master & Item Master)
                   buildStyledExpansionTile(
                     context,
@@ -123,7 +120,6 @@ class CustomDrawer extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
-
                   buildStyledExpansionTile(
                     context,
                     title: 'Sale Module',
@@ -133,12 +129,12 @@ class CustomDrawer extends StatelessWidget {
                     items: [
                       {'title': 'Sales Order Entry', 'page': const SalesOrderEntryScreen()},
                       {'title': 'Sales Entry', 'page': const SalesEntryScreen()},
+                      {'title': 'Sales Entry', 'page': const SalesEntryPosScreen(), 'badge': 'POS'}, // 👈 NEW
                       {'title': 'Sales Invoice', 'page': const SaleScreen()},
                       {'title': 'Customer List', 'page': const ReceivableScreen()},
                     ],
                   ),
                   const SizedBox(height: 8),
-
                   buildStyledExpansionTile(
                     context,
                     title: 'Purchase Module',
@@ -151,9 +147,7 @@ class CustomDrawer extends StatelessWidget {
                       {'title': 'Vendor List', 'page': const PayableScreen()},
                     ],
                   ),
-
                   const SizedBox(height: 8),
-
                   buildStyledExpansionTile(
                     context,
                     title: 'Cash/Bank',
@@ -162,12 +156,9 @@ class CustomDrawer extends StatelessWidget {
                     iconColor: Colors.orange.shade700,
                     items: [
                       {'title': 'Cash/Bank Ac', 'page': const CashBankEntryScreen()},
-                      
                     ],
                   ),
-
                   const SizedBox(height: 20),
-
                   // --- SECTION 2: REPORTS & ANALYTICS ---
                   const Padding(
                     padding: EdgeInsets.only(left: 8, bottom: 8),
@@ -176,7 +167,6 @@ class CustomDrawer extends StatelessWidget {
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.1),
                     ),
                   ),
-
                   buildStyledExpansionTile(
                     context,
                     title: 'Financial Reports',
@@ -192,9 +182,7 @@ class CustomDrawer extends StatelessWidget {
                       {'title': 'Customer Ageing', 'page': const AgeingScreen()},
                     ],
                   ),
-
                   const SizedBox(height: 20),
-
                   // --- SECTION 3: SYSTEM SETTINGS ---
                   Container(
                     decoration: BoxDecoration(
@@ -219,10 +207,45 @@ class CustomDrawer extends StatelessWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  // --- DEV: TEST TOASTS ROW (remove before shipping) ---
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey.shade200, width: 1),
+                    ),
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Test Toasts',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87),
+                            ),
+                            Row(
+                              children: [
+                                _toastTestIcon(context, Icons.check_circle_outline, Colors.green,
+                                    () => ToastService.showSuccess(context, 'Success toast')),
+                                _toastTestIcon(context, Icons.error_outline, Colors.red,
+                                    () => ToastService.showError(context, 'Error toast')),
+                                _toastTestIcon(context, Icons.warning_amber_rounded, Colors.orange,
+                                    () => ToastService.showWarning(context, 'Warning toast')),
+                                _toastTestIcon(context, Icons.info_outline, Colors.blue,
+                                    () => ToastService.showInfo(context, 'Info toast')),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            
             // --- LOGOUT BUTTON AT THE BOTTOM ---
             SafeArea(
               top: false,
@@ -255,8 +278,8 @@ class CustomDrawer extends StatelessWidget {
   // --- MODERN CARD EXPANSION TILE BUILDER ---
   Widget buildStyledExpansionTile(
     BuildContext context, {
-    required String title, 
-    required IconData icon, 
+    required String title,
+    required IconData icon,
     required Color iconBgColor,
     required Color iconColor,
     required List<Map<String, dynamic>> items,
@@ -283,8 +306,25 @@ class CustomDrawer extends StatelessWidget {
             title: Text(title, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 15)),
             iconColor: Colors.black54,
             collapsedIconColor: Colors.grey.shade500,
-            childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 12), 
+            childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
             children: items.map((mapItem) {
+              final String? badge = mapItem['badge'] as String?;
+              final bool hasBadge = badge != null && badge.isNotEmpty;
+
+              // Badge color scheme: NEW -> red, POS -> blue highlight, anything else -> orange
+              Color badgeBg;
+              Color badgeText;
+              if (badge == 'NEW') {
+                badgeBg = Colors.red.shade100;
+                badgeText = Colors.red.shade700;
+              } else if (badge == 'POS') {
+                badgeBg = const Color(0xFF3D5AFE).withValues(alpha: 0.12);
+                badgeText = const Color(0xFF3D5AFE);
+              } else {
+                badgeBg = Colors.orange.shade100;
+                badgeText = Colors.orange.shade800;
+              }
+
               return Column(
                 children: [
                   const Divider(height: 1, color: Colors.black12),
@@ -293,36 +333,41 @@ class CustomDrawer extends StatelessWidget {
                     child: ListTile(
                       dense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      title: Text(
-                        mapItem['title'], 
-                        style: TextStyle(color: Colors.grey.shade800, fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                      trailing: Row(
+                      title: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (mapItem['badge'] != null && mapItem['badge'].toString().isNotEmpty)
+                          Text(
+                            mapItem['title'],
+                            style: TextStyle(color: Colors.grey.shade800, fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                          if (hasBadge) ...[
+                            const SizedBox(width: 7),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                               decoration: BoxDecoration(
-                                color: mapItem['badge'] == 'NEW' ? Colors.red.shade100 : Colors.orange.shade100,
-                                borderRadius: BorderRadius.circular(6),
+                                color: badgeBg,
+                                borderRadius: BorderRadius.circular(20),
+                                border: badge == 'POS'
+                                    ? Border.all(color: const Color(0xFF3D5AFE), width: 1)
+                                    : null,
                               ),
                               child: Text(
-                                mapItem['badge'],
+                                badge,
                                 style: TextStyle(
-                                  fontSize: 10, 
-                                  fontWeight: FontWeight.bold, 
-                                  color: mapItem['badge'] == 'NEW' ? Colors.red.shade700 : Colors.orange.shade800
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.4,
+                                  color: badgeText,
                                 ),
                               ),
                             ),
-                          const Icon(Icons.chevron_right, size: 16, color: Colors.black26),
+                          ],
                         ],
                       ),
+                      trailing: const Icon(Icons.chevron_right, size: 16, color: Colors.black26),
                       onTap: () {
                         if (mapItem['page'] != null) {
-                          Navigator.pop(context); 
+                          Navigator.pop(context);
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => mapItem['page']),
@@ -337,6 +382,17 @@ class CustomDrawer extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  // --- DEV: small icon button for the toast test row ---
+  Widget _toastTestIcon(BuildContext context, IconData icon, Color color, VoidCallback onTap) {
+    return IconButton(
+      icon: Icon(icon, color: color, size: 20),
+      onPressed: onTap,
+      splashRadius: 18,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
     );
   }
 }
