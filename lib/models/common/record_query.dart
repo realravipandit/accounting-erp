@@ -11,7 +11,7 @@ class RecordQuery {
 
   RecordQuery({
     this.page = 1,
-    this.limit = 25,
+    this.limit = 50,
     this.search,
     this.period,
     this.startDate,
