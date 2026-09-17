@@ -26,6 +26,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
   late DateTime _selectedAdDate;
 
   bool _isTaxInvoice = false;
+
   List<Map<String, dynamic>> _counters = [];
   String? _selectedCounterName;
   Map<String, dynamic>? _selectedCustomer;
@@ -36,7 +37,9 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
 
   double _subTotal = 0.0;
   double _grandTotal = 0.0;
+
   final int _paymentLedgerId = 1;
+
   // Which bottom button is currently mid-save: 'complete', 'preview', or null.
   String? _loadingButton;
 
@@ -126,7 +129,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
   void _calculateTotals({int? manualIndex, bool isPercentChange = false}) {
     double tempSub = 0.0;
     for (var item in _cartItems) {
-      tempSub += (item['qty'] * item['price']);
+      tempSub += (item['totalAmount'] as double);
     }
 
     double runningTotal = tempSub;
@@ -208,92 +211,311 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
         });
       }
     });
-
     _calculateTotals();
   }
 
-  void _showAddBillingItemDialog(Map<String, dynamic> item, {Map<String, dynamic>? existingCartItem, int? existingIndex}) {
+  // ITEM DIALOG (Add / Edit) - now mirrors Purchase Entry's item-specific terms UI
+  void _showAddBillingItemDialog(
+    Map<String, dynamic> item, {
+    Map<String, dynamic>? existingCartItem,
+    int? existingIndex,
+  }) {
     final bool isEditing = existingCartItem != null;
     final double initQty = isEditing ? (existingCartItem['qty'] as double) : 1.0;
-    final double initRate = isEditing ? (existingCartItem['price'] as double) : double.tryParse((item['SalesRate'] ?? item['salesRate'] ?? '0').toString()) ?? 0.0;
+    final double initRate = isEditing
+        ? (existingCartItem['price'] as double)
+        : double.tryParse((item['SalesRate'] ?? item['salesRate'] ?? '0').toString()) ?? 0.0;
 
     final qtyCtrl = TextEditingController(text: initQty.toString());
     final rateCtrl = TextEditingController(text: initRate.toStringAsFixed(2));
-    double dialogNetTotal = initQty * initRate;
+
+    // Item-specific terms (ItemWise = Y), same pattern as Purchase Entry
+    List<Map<String, dynamic>> dialogTerms = _termMasters.where((t) {
+      final itemWiseValue = t['ItemWise'] ?? t['itemWise'] ?? t['itemwise'];
+      final String isItemWise = itemWiseValue?.toString().trim().toUpperCase() ?? 'N';
+      return isItemWise == 'Y' || isItemWise == '1' || isItemWise == 'TRUE';
+    }).map<Map<String, dynamic>>((t) {
+      final double dbRate = double.tryParse((t['Rate'] ?? t['rate'] ?? 0.0).toString()) ?? 0.0;
+      return {
+        'termId': t['TermID'] ?? t['termID'] ?? t['termid'] ?? t['TermId'] ?? 0,
+        'termName': (t['TermName'] ?? t['termName'] ?? t['termname'] ?? 'Term').toString(),
+        'sign': (t['Sign'] ?? t['sign'] ?? '+').toString().trim(),
+        'percentController': TextEditingController(
+          text: dbRate % 1 == 0 ? dbRate.toInt().toString() : dbRate.toStringAsFixed(2),
+        ),
+        'amountController': TextEditingController(),
+        'isActive': false,
+        'rate': dbRate,
+      };
+    }).toList();
+
+    // Pre-fill saved item terms when editing an existing cart line
+    if (isEditing && existingCartItem['itemTerms'] != null) {
+      for (final existingTerm in existingCartItem['itemTerms']) {
+        for (final dt in dialogTerms) {
+          if (dt['termId'] == existingTerm['termId']) {
+            dt['isActive'] = true;
+            dt['percentController'].text = (existingTerm['percent'] ?? 0.0).toString();
+            dt['amountController'].text = (existingTerm['amount'] ?? 0.0).toString();
+          }
+        }
+      }
+    }
+
+    double dialogNetTotal =
+        isEditing ? (existingCartItem['totalAmount'] as double) : initQty * initRate;
 
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'AddItem',
-      pageBuilder: (_, __, ___) => StatefulBuilder(
-        builder: (ctx, setDlg) {
-          void recalculateDialog() {
-            double qty = double.tryParse(qtyCtrl.text) ?? 1.0;
-            double rate = double.tryParse(rateCtrl.text) ?? 0.0;
-            setDlg(() => dialogNetTotal = qty * rate);
-          }
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (_, __, ___) {
+        return StatefulBuilder(
+          builder: (ctx, setDlg) {
+            void recalculateDialog({bool fromAmount = false, int? index}) {
+              final double qty = double.tryParse(qtyCtrl.text) ?? 1.0;
+              final double rate = double.tryParse(rateCtrl.text) ?? 0.0;
+              double currentTotal = qty * rate;
 
-          final itemName = (item['ItemName'] ?? item['itemName'] ?? '').toString();
-
-          return AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text(isEditing ? 'Edit POS Item' : 'Add Item to POS Bill', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: _primaryColor.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
-                    child: Row(children: [
-                      Icon(Icons.inventory_2, color: _primaryColor),
-                      const SizedBox(width: 10),
-                      Expanded(child: Text(itemName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-                    ]),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(children: [
-                    Expanded(child: _dlgField(label: 'Quantity', controller: qtyCtrl, onChanged: (_) => recalculateDialog())),
-                    const SizedBox(width: 12),
-                    Expanded(child: _dlgField(label: 'Rate (Rs.)', controller: rateCtrl, onChanged: (_) => recalculateDialog())),
-                  ]),
-                  const SizedBox(height: 14),
-                  Text('Total: Rs. ${dialogNetTotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green)),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: _primaryColor, foregroundColor: Colors.white),
-                onPressed: () {
-                  setState(() {
-                    final updatedItem = {
-                      'id': item['ItemID'] ?? item['itemId'],
-                      'name': itemName,
-                      'price': double.tryParse(rateCtrl.text) ?? 0.0,
-                      'qty': double.tryParse(qtyCtrl.text) ?? 1.0,
-                      'totalAmount': dialogNetTotal,
-                      'itemTerms': [],
-                      'originalItem': item,
-                    };
-                    if (isEditing && existingIndex != null) {
-                      _cartItems[existingIndex] = updatedItem;
-                    } else {
-                      _cartItems.add(updatedItem);
+              for (int i = 0; i < dialogTerms.length; i++) {
+                final term = dialogTerms[i];
+                if (term['isActive'] == true) {
+                  if (fromAmount && index == i) {
+                    final double amount = double.tryParse(term['amountController'].text) ?? 0.0;
+                    if (currentTotal > 0) {
+                      term['percentController'].text =
+                          ((amount / currentTotal) * 100).toStringAsFixed(2);
                     }
-                  });
-                  _calculateTotals();
-                  Navigator.pop(ctx);
-                },
-                child: Text(isEditing ? 'Save Changes' : 'Add to Bill'),
+                    currentTotal += term['sign'] == '-' ? -amount : amount;
+                  } else {
+                    final double percent = double.tryParse(term['percentController'].text) ?? 0.0;
+                    final double amount = (currentTotal * percent) / 100;
+                    term['amountController'].text = amount == 0 ? '0' : amount.toStringAsFixed(2);
+                    currentTotal += term['sign'] == '-' ? -amount : amount;
+                  }
+                } else {
+                  term['amountController'].clear();
+                }
+              }
+
+              setDlg(() {
+                dialogNetTotal = currentTotal;
+              });
+            }
+
+            final itemName = (item['ItemName'] ?? item['itemName'] ?? '').toString();
+
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(
+                isEditing ? 'Edit POS Item' : 'Add Item to POS Bill',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
               ),
-            ],
-          );
-        },
-      ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: _primaryColor.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _primaryColor.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.inventory_2_outlined, color: _primaryColor, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'ITEM',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
+                                  Text(
+                                    itemName,
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _dlgField(
+                              label: 'Quantity',
+                              controller: qtyCtrl,
+                              onChanged: (_) => recalculateDialog(),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: _dlgField(
+                              label: 'Rate (Rs.)',
+                              controller: rateCtrl,
+                              onChanged: (_) => recalculateDialog(),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      if (dialogTerms.isNotEmpty)
+                        const Text(
+                          'Item Specific Terms',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12),
+                        ),
+                      ...dialogTerms.asMap().entries.map((entry) {
+                        final int idx = entry.key;
+                        final Map<String, dynamic> t = entry.value;
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: t['isActive'],
+                                activeColor: _primaryColor,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                onChanged: (val) {
+                                  t['isActive'] = val ?? false;
+                                  recalculateDialog();
+                                },
+                              ),
+                              Expanded(
+                                child: Text(
+                                  t['termName'],
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 75,
+                                child: TextField(
+                                  controller: t['percentController'],
+                                  decoration: _modernInputDecoration().copyWith(suffixText: '%'),
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (_) => recalculateDialog(),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 95,
+                                child: TextField(
+                                  controller: t['amountController'],
+                                  decoration: _modernInputDecoration().copyWith(prefixText: 'Rs '),
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (_) => recalculateDialog(fromAmount: true, index: idx),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: _primaryColor,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Net Total',
+                              style: TextStyle(color: Colors.white70, fontSize: 13),
+                            ),
+                            Text(
+                              'Rs. ${dialogNetTotal.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
+                ),
+                ElevatedButton.icon(
+                  icon: Icon(isEditing ? Icons.save_rounded : Icons.add_shopping_cart, size: 18),
+                  label: Text(
+                    isEditing ? 'Save Changes' : 'Add to Bill',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      final updatedItem = {
+                        'id': item['ItemID'] ?? item['itemId'],
+                        'name': itemName,
+                        'price': double.tryParse(rateCtrl.text) ?? 0.0,
+                        'qty': double.tryParse(qtyCtrl.text) ?? 1.0,
+                        'totalAmount': dialogNetTotal,
+                        'itemTerms': dialogTerms
+                            .where((dt) => dt['isActive'] == true)
+                            .map((dt) {
+                          return {
+                            'termId': dt['termId'],
+                            'termName': dt['termName'],
+                            'sign': dt['sign'],
+                            'percent': double.tryParse(dt['percentController'].text) ?? 0.0,
+                            'amount': double.tryParse(dt['amountController'].text) ?? 0.0,
+                          };
+                        }).toList(),
+                        'originalItem': item,
+                      };
+                      if (isEditing && existingIndex != null) {
+                        _cartItems[existingIndex] = updatedItem;
+                      } else {
+                        _cartItems.add(updatedItem);
+                      }
+                    });
+                    _calculateTotals();
+                    Navigator.pop(ctx);
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+      transitionBuilder: (_, animation, __, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+          child: FadeTransition(opacity: animation, child: child),
+        );
+      },
     );
   }
 
@@ -325,7 +547,12 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
 
               return Column(
                 children: [
-                  Container(width: 40, height: 4, margin: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                  ),
                   const Text('Select Customer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   Padding(
@@ -334,7 +561,13 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
                       controller: searchController,
                       autofocus: true,
                       onChanged: (_) => setModal(() {}),
-                      decoration: InputDecoration(hintText: 'Search...', prefixIcon: const Icon(Icons.search), filled: true, fillColor: Colors.grey[100], border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none)),
+                      decoration: InputDecoration(
+                        hintText: 'Search...',
+                        prefixIcon: const Icon(Icons.search),
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -354,7 +587,10 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
                         final c = filtered[i];
                         final name = (c['LedgerName'] ?? c['ledgerName'] ?? '').toString();
                         return ListTile(
-                          leading: CircleAvatar(backgroundColor: _primaryColor.withValues(alpha: 0.1), child: Text(name.isNotEmpty ? name[0] : 'C', style: TextStyle(color: _primaryColor, fontWeight: FontWeight.bold))),
+                          leading: CircleAvatar(
+                            backgroundColor: _primaryColor.withValues(alpha: 0.1),
+                            child: Text(name.isNotEmpty ? name[0] : 'C', style: TextStyle(color: _primaryColor, fontWeight: FontWeight.bold)),
+                          ),
                           title: Text(name),
                           onTap: () {
                             setState(() => _selectedCustomer = c);
@@ -378,7 +614,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
   /// Returns the service result on success, or null on validation
   /// failure / API failure (an error toast is already shown in that case).
   /// Assumes the caller has already set `_loadingButton` before calling this.
-  /// On success, `_loadingButton` is left set — the caller decides when to
+  /// On success, `_loadingButton` is left set --- the caller decides when to
   /// clear it (immediately for the popup flow, or after navigation for
   /// the preview flow).
   Future<Map<String, dynamic>?> _processSale() async {
@@ -464,7 +700,6 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
     try {
       final result = await _posService.submitPosSale(payload);
       if (!mounted) return null;
-
       if (result['success'] == true) {
         return result;
       } else {
@@ -479,7 +714,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
     }
   }
 
-  /// "Complete Sale" button — saves the sale and shows a completion
+  /// "Complete Sale" button --- saves the sale and shows a completion
   /// popup with the bill details, then resets the form.
   Future<void> _completeSale() async {
     final double tenderAmount = double.tryParse(_tenderController.text) ?? _grandTotal;
@@ -491,7 +726,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
     await _showSaleCompletedDialog(result, tenderAmount);
   }
 
-  /// "Save & Preview" button — saves the sale and opens the PDF preview
+  /// "Save & Preview" button --- saves the sale and opens the PDF preview
   /// (this is what the single "Complete Sale" button used to do).
   Future<void> _completeSaleAndPreview() async {
     final double tenderAmount = double.tryParse(_tenderController.text) ?? _grandTotal;
@@ -609,6 +844,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
       if (_subTotal > 0) {
         itemDiscount = discountAmount * (lineTotalInclusive / _subTotal);
       }
+
       double netLineInclusive = lineTotalInclusive - itemDiscount;
 
       // Calculate pre-tax amounts only if PDF is Tax type
@@ -617,6 +853,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
           : netLineInclusive;
 
       calculatedTaxableValue += lineTaxableAmount;
+
       double rateBeforeTax = qty > 0 ? lineTaxableAmount / qty : 0.0;
 
       processedItems.add({
@@ -831,73 +1068,54 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
               ),
             ]),
             const SizedBox(height: 16),
-            Autocomplete<Map<String, dynamic>>(
-              optionsBuilder: (TextEditingValue v) {
-                if (v.text.trim().isEmpty) return const Iterable<Map<String, dynamic>>.empty();
-                final query = v.text.trim().toLowerCase();
-                return _cachedItems.where((item) => ((item['ItemCode'] ?? '').toString().toLowerCase().contains(query) || (item['ItemName'] ?? '').toString().toLowerCase().contains(query)));
+            InkWell(
+              onTap: () async {
+                final selected = await Navigator.push<Map<String, dynamic>>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ItemSearchPage(items: _cachedItems, primaryColor: _primaryColor),
+                  ),
+                );
+                if (selected != null && mounted) {
+                  _showAddBillingItemDialog(selected);
+                }
               },
-              displayStringForOption: (item) => (item['ItemName'] ?? '').toString(),
-              onSelected: (Map<String, dynamic> selection) => _showAddBillingItemDialog(selection),
-              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  onSubmitted: (val) {
-                    if (val.trim().isNotEmpty) {
-                      _handleBarcodeSearch(val.trim());
-                      controller.clear();
-                      onFieldSubmitted();
-                    }
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Search item name / code or scan barcode...',
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    prefixIcon: Icon(Icons.search, color: _primaryColor),
-                    suffixIcon: IconButton(
-                      icon: Icon(Icons.qr_code_scanner, color: _primaryColor),
-                      onPressed: () async {
-                        FocusScope.of(context).unfocus();
-                        await Future.delayed(const Duration(milliseconds: 50));
-                        final scannedCode = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => BarcodeScannerScreen(primaryColor: _primaryColor)));
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.search, color: _primaryColor),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Search item name / code or scan barcode...',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () async {
+                        final scannedCode = await Navigator.push<String>(
+                          context,
+                          MaterialPageRoute(builder: (_) => BarcodeScannerScreen(primaryColor: _primaryColor)),
+                        );
                         if (scannedCode != null && scannedCode.trim().isNotEmpty) {
                           _handleBarcodeSearch(scannedCode.trim());
                         }
                       },
-                    ),
-                  ),
-                );
-              },
-              optionsViewBuilder: (context, Function(Map<String, dynamic>) onSelected, options) {
-                return Align(
-                  alignment: Alignment.topLeft,
-                  child: Material(
-                    elevation: 4.0,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      width: MediaQuery.of(context).size.width - 32,
-                      constraints: const BoxConstraints(maxHeight: 250),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
-                      child: ListView.builder(
-                        padding: EdgeInsets.zero,
-                        shrinkWrap: true,
-                        itemCount: options.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          final item = options.elementAt(index);
-                          return ListTile(
-                            dense: true,
-                            title: Text((item['ItemName'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            subtitle: Text('Code: ${item['ItemCode'] ?? ''} | Rate: Rs. ${item['SalesRate'] ?? '0'}', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                            onTap: () => onSelected(item),
-                          );
-                        },
+                      borderRadius: BorderRadius.circular(20),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: Icon(Icons.qr_code_scanner, color: _primaryColor),
                       ),
                     ),
-                  ),
-                );
-              },
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             Container(
@@ -1129,6 +1347,125 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             },
           ),
           Center(child: Container(width: 280, height: 160, decoration: BoxDecoration(border: Border.all(color: widget.primaryColor, width: 3), borderRadius: BorderRadius.circular(12)))),
+        ],
+      ),
+    );
+  }
+}
+
+/// Full-screen item picker (mirrors Purchase Entry's "Add Items" flow):
+/// tapping the search field on the POS screen opens this page instead of
+/// typing inline. Selecting an item pops it back to the caller, which then
+/// opens the Add/Edit item dialog.
+class ItemSearchPage extends StatefulWidget {
+  final List<Map<String, dynamic>> items;
+  final Color primaryColor;
+
+  const ItemSearchPage({super.key, required this.items, required this.primaryColor});
+
+  @override
+  State<ItemSearchPage> createState() => _ItemSearchPageState();
+}
+
+class _ItemSearchPageState extends State<ItemSearchPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.items.where((item) {
+      final name = (item['ItemName'] ?? item['itemName'] ?? '').toString().toLowerCase();
+      final code = (item['ItemCode'] ?? item['itemCode'] ?? '').toString().toLowerCase();
+      return name.contains(_query) || code.contains(_query);
+    }).toList();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F8FA),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
+        title: const Text('Select Item', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _searchController,
+              autofocus: true,
+              onChanged: (val) => setState(() => _query = val.trim().toLowerCase()),
+              decoration: InputDecoration(
+                hintText: 'Search item name / code...',
+                prefixIcon: Icon(Icons.search, color: widget.primaryColor),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _query = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: widget.primaryColor, width: 1.5),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: filtered.isEmpty
+                ? Center(
+                    child: Text(
+                      widget.items.isEmpty ? 'No items loaded.' : 'No items found.',
+                      style: TextStyle(color: Colors.grey[500]),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[200]),
+                    itemBuilder: (_, i) {
+                      final item = filtered[i];
+                      final name = (item['ItemName'] ?? item['itemName'] ?? 'Unknown').toString();
+                      final code = (item['ItemCode'] ?? item['itemCode'] ?? '').toString();
+                      final rate = (item['SalesRate'] ?? item['salesRate'] ?? '0').toString();
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: widget.primaryColor.withValues(alpha: 0.1),
+                          child: Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : 'I',
+                            style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(
+                          'Code: ${code.isNotEmpty ? code : 'N/A'} | Rate: Rs. $rate',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                        onTap: () => Navigator.pop(context, item),
+                      );
+                    },
+                  ),
+          ),
         ],
       ),
     );

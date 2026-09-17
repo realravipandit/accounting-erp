@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:sas_app/services/inventory/inventory_service.dart';
 import 'package:intl/intl.dart';
@@ -8,7 +7,7 @@ import 'package:sas_app/core/services/toast_service.dart';
 // --- Self-contained palette. No external theme dependency. ---
 // Grounded in the physical vocabulary of stock rooms: shelf tags,
 // bin labels, price stickers. Quiet teal ink, one warm amber
-// reserved for the single generated thing on the page — the code.
+// reserved for the single generated thing on the page --- the code.
 class _Deck {
   static const ground = Color(0xFFF3F6F5);
   static const panel = Color(0xFFFFFFFF);
@@ -55,6 +54,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   // --- State Variables ---
   String _selectedItemType = 'Inventory Item';
   String _vatStatus = 'Yes';
+
   List<Map<String, dynamic>> _availableUnits = [];
   int? _selectedUnitId;
   int? _selectedAltUnitId;
@@ -78,6 +78,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     'Service Item',
     'Fixed Asset',
   ];
+
   final List<String> _vatOptions = ['Yes', 'No'];
 
   @override
@@ -263,6 +264,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 
     String? formattedMfgDate;
     String? formattedExpDate;
+
     try {
       if (_mfgDateController.text.isNotEmpty) {
         formattedMfgDate = DateFormat('yyyy-MM-dd').format(
@@ -445,7 +447,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                   _buildItemTypeSelector(),
                 ],
               ),
-
               const SizedBox(height: 26),
               _sectionLabel('Units', const Color(0xFF6E8F84)),
               const SizedBox(height: 12),
@@ -456,7 +457,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                   _buildQtyEquationRow(primaryUnitCode, altUnitCode),
                 ],
               ),
-
               const SizedBox(height: 26),
               _sectionLabel('Pricing & tax', _Deck.tag),
               const SizedBox(height: 12),
@@ -518,7 +518,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                   _buildVatRow(),
                 ],
               ),
-
               const SizedBox(height: 26),
               _sectionLabel('Manufacturing & expiry', const Color(0xFF6E8F84)),
               const SizedBox(height: 12),
@@ -543,7 +542,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 30),
               _buildSubmitButton(),
               const SizedBox(height: 40),
@@ -557,7 +555,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   // ------------------------------------------------------------------
   // Section chrome
   // ------------------------------------------------------------------
-
   Widget _sectionLabel(String text, Color dot) {
     return Row(
       children: [
@@ -580,11 +577,15 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   }
 
   // ------------------------------------------------------------------
-  // Fields — all Autocomplete widgets use Flutter's own default
+  // Fields --- all Autocomplete widgets use Flutter's own default
   // suggestion-overlay rendering (no custom optionsViewBuilder), so
   // positioning/sizing always matches the field itself.
+  //
+  // Item group / Item sub group are select-only dropdowns: the field
+  // is readOnly (no keyboard, no typing) and tapping it clears the
+  // internal filter text before requesting focus, so the same overlay
+  // always opens showing the FULL list rather than a filtered one.
   // ------------------------------------------------------------------
-
   Widget _buildNameSearchField() {
     return Autocomplete<Map<String, dynamic>>(
       displayStringForOption: (option) =>
@@ -622,6 +623,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
             }
           });
         }
+
         return TextFormField(
           controller: controller,
           focusNode: focusNode,
@@ -679,7 +681,15 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
         return TextFormField(
           controller: controller,
           focusNode: focusNode,
-          onEditingComplete: onEditingComplete,
+          readOnly: true,
+          showCursor: false,
+          onTap: () {
+            // Clear the filter text first so the overlay always shows
+            // the full, unfiltered group list rather than one matching
+            // whatever was previously selected.
+            controller.clear();
+            FocusScope.of(context).requestFocus(focusNode);
+          },
           textInputAction: TextInputAction.next,
           style: const TextStyle(fontSize: 14.5, color: _Deck.ink),
           decoration: _deckDecoration('Item group').copyWith(
@@ -754,7 +764,16 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
         return TextFormField(
           controller: controller,
           focusNode: focusNode,
-          onEditingComplete: onEditingComplete,
+          readOnly: true,
+          showCursor: false,
+          onTap: !enabled
+              ? null
+              : () {
+                  // Clear the filter text first so the overlay always
+                  // shows the full, unfiltered sub-group list.
+                  controller.clear();
+                  FocusScope.of(context).requestFocus(focusNode);
+                },
           textInputAction: TextInputAction.next,
           enabled: enabled,
           style: TextStyle(fontSize: 14.5, color: enabled ? _Deck.ink : _Deck.inkSoft),
@@ -1016,7 +1035,6 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   // ------------------------------------------------------------------
   // Field primitives
   // ------------------------------------------------------------------
-
   InputDecoration _deckDecoration(String label, {String? suffixGlyph, Widget? suffixIcon}) {
     return InputDecoration(
       labelText: label.isEmpty ? null : label,
@@ -1100,9 +1118,10 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 }
 
 /// An un-boxed grouping surface: soft fill, quiet edge, no stacked
-/// card kit — just enough separation to read as one group of fields.
+/// card kit --- just enough separation to read as one group of fields.
 class _Panel extends StatelessWidget {
   final List<Widget> children;
+
   const _Panel({required this.children});
 
   @override
