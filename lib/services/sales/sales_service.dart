@@ -15,83 +15,72 @@ class SalesService {
   // ============================================================
 
   Future<Map<String, dynamic>> fetchSales(RecordQuery query) async {
-    // Convert the RecordQuery object into HTTP parameters
-    final queryParameters = <String, dynamic>{
-      'page': query.page.toString(),
-      'limit': query.limit.toString(),
-      'sortField': query.sortField,
-      'sortOrder': query.sortOrder,
-    };
+  final queryParameters = <String, dynamic>{
+    'page': query.page.toString(),
+    'limit': query.limit.toString(),
+    'sortField': query.sortField,
+    'sortOrder': query.sortOrder,
+  };
 
-    if (query.search != null && query.search!.isNotEmpty) {
-      queryParameters['search'] = query.search;
-    }
-    
-    // Safely format DateTime objects into strings for the backend
-    if (query.startDate != null) {
-      queryParameters['startDate'] = query.startDate!.toIso8601String();
-    }
-    if (query.endDate != null) {
-      queryParameters['endDate'] = query.endDate!.toIso8601String();
-    }
-    
-    // Merge any extra filters you might add later
-    if (query.extraFilters.isNotEmpty) {
-      queryParameters.addAll(query.extraFilters);
-    }
-
-    final response = await _api.get(
-      'sales',
-      queryParameters: queryParameters,
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Failed to load sales records');
-    }
-
-    final data = jsonDecode(response.body);
-
-    if (data is Map<String, dynamic>) {
-      return data;
-    }
-
-    // Fallback normalization just in case
-    return {
-      'records': data is List ? data : [],
-      'pagination': {
-        'page': query.page,
-        'limit': query.limit,
-      },
-    };
+  if (query.search != null && query.search!.isNotEmpty) {
+    queryParameters['search'] = query.search;
+  }
+  if (query.startDate != null) {
+    queryParameters['startDate'] = query.startDate!.toIso8601String();
+  }
+  if (query.endDate != null) {
+    queryParameters['endDate'] = query.endDate!.toIso8601String();
+  }
+  if (query.extraFilters.isNotEmpty) {
+    queryParameters.addAll(query.extraFilters);
   }
 
-  // ============================================================
-  // GET SALE DETAILS
-  // ============================================================
+  final response = await _api.get(
+    'sales',
+    queryParameters: queryParameters,
+  );
 
-  Future<Map<String, dynamic>> fetchSalesDetails(
-    String voucherId,
-  ) async {
-    final response = await _api.get(
-      'sales/details',
-      queryParameters: {
-        'voucherId': voucherId,
-      },
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Failed to load sales details');
-    }
-
-    final data = jsonDecode(response.body);
-
-    if (data is Map<String, dynamic>) {
-      return data;
-    }
-
-    return {};
+  if (response.statusCode != 200) {
+    print('SALES FETCH FAILED: status=${response.statusCode} body=${response.body}');
+    throw Exception('Failed to load sales records');
   }
 
+  final data = jsonDecode(response.body);
+  if (data is Map<String, dynamic>) {
+    return data;
+  }
+
+  return {
+    'records': data is List ? data : [],
+    'pagination': {
+      'page': query.page,
+      'limit': query.limit,
+    },
+  };
+}
+
+Future<Map<String, dynamic>> fetchSalesDetails(
+  String voucherId,
+) async {
+  final response = await _api.get(
+    'sales/details',
+    queryParameters: {
+      'voucherId': voucherId,
+    },
+  );
+
+  if (response.statusCode != 200) {
+    print('SALES DETAILS FETCH FAILED: status=${response.statusCode} body=${response.body}');
+    throw Exception('Failed to load sales details');
+  }
+
+  final data = jsonDecode(response.body);
+  if (data is Map<String, dynamic>) {
+    return data;
+  }
+
+  return {};
+}
   // ============================================================
   // NEXT INVOICE / VOUCHER NUMBER
   // Original working endpoint: /api/sales/next-voucher

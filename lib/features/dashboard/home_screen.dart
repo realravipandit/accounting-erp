@@ -20,12 +20,19 @@ import 'package:sas_app/features/purchase/purchase_entry_screen.dart';
 import 'package:sas_app/features/banking/cash_bank_entry_screen.dart';
 import 'package:sas_app/models/common/record_filter.dart';
 import 'package:sas_app/shared/widgets/records/record_date_filter.dart';
-import 'package:sas_app/utils/date_period_utils.dart'; // 👉 adjust path to match your project structure
+import 'package:sas_app/utils/date_period_utils.dart';
+
+// 👉 new combined tabbed screens backing the Transactions / Parties nav tabs
+import 'package:sas_app/features/navigation/transactions_screen.dart';
+import 'package:sas_app/features/navigation/parties_screen.dart';
+
+// 👉 nav-chrome widgets extracted out of this file --- not dashboard-specific
+import 'package:sas_app/shared/widgets/app_bottom_nav.dart';
+import 'package:sas_app/shared/widgets/fade_indexed_stack.dart';
 
 // ============================================================================
 // HOME PAGE
 // ============================================================================
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -39,9 +46,23 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   String _companyName = 'Dashboard';
   bool _isOverviewFilterOpen = false;
   bool _isAddMenuOpen = false;
+  bool _isDrawerOpen = false;
   late final AnimationController _addMenuController;
   final _syncService = SyncService();
   late final List<Widget> _pages;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  // TODO: wire to real counts --- unpaid invoices (Transactions) and low-stock
+  // items (Inventory). Deferred per the nav redesign spec; badges stay
+  // hidden (count 0) until this is wired up.
+  int _transactionsBadgeCount = 0;
+  int _inventoryBadgeCount = 0;
+
+  // Bottom-nav geometry, shared between the bar, the floating pill, and the
+  // quick-add speed-dial menu so they stay aligned.
+  static const double _kBarContentHeight = 68;
+  static const double _kPillHeight = 48;
+  static const double _kPillGap = 14;
 
   @override
   void initState() {
@@ -49,10 +70,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     _addMenuController = AnimationController(vsync: this, duration: const Duration(milliseconds: 550));
     _pages = [
       DashboardPage(onFilterSheetOpenChanged: _setOverviewFilterOpen),
-      const ReceivableScreen(),
-      const AddNewContentPage(),
-      const SaleScreen(),
-      const PayableScreen(),
+      const TransactionsScreen(),
+      const PartiesScreen(),
+      const InventoryScreen(),
     ];
     const FlutterSecureStorage().read(key: 'selected_company_name').then((val) {
       if (val != null && mounted) setState(() => _companyName = val);
@@ -67,6 +87,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   void _setOverviewFilterOpen(bool open) {
     if (mounted) setState(() => _isOverviewFilterOpen = open);
+  }
+
+  void _onNavTap(int i) {
+    // The floating pill (and its quick-add menu) only live on Dashboard ---
+    // if the user switches away while the menu happens to be open, close it.
+    if (i != 0) _closeAddMenu();
+    setState(() => _currentIndex = i);
   }
 
   void _toggleAddMenu() {
@@ -138,6 +165,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   Widget _buildQuickAddMenu() {
     final options = _quickAddOptions();
     final bottomSafe = MediaQuery.of(context).padding.bottom;
+    // Menu sits above the floating pill, which itself sits above the bar.
+    final menuBottom = bottomSafe + _kBarContentHeight + _kPillGap + _kPillHeight + 14;
 
     return AnimatedBuilder(
       animation: _addMenuController,
@@ -159,7 +188,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               ),
               Positioned(
                 right: 16,
-                bottom: bottomSafe + 12 + 64 + 16,
+                bottom: menuBottom,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: List.generate(options.length, (i) {
@@ -189,6 +218,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    final bottomSafe = MediaQuery.of(context).padding.bottom;
+    final pillBottom = bottomSafe + _kBarContentHeight + _kPillGap;
+
     return Stack(
       children: [
         AnimatedContainer(
@@ -216,8 +248,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       systemNavigationBarContrastEnforced: false,
                     ),
                     child: Scaffold(
+                      key: _scaffoldKey,
                       backgroundColor: const Color(0xFFF9FAFB),
                       drawer: const CustomDrawer(),
+                      onDrawerChanged: (isOpen) => setState(() => _isDrawerOpen = isOpen),
                       extendBody: true,
                       appBar: AppBar(
                         backgroundColor: Colors.white,
@@ -234,13 +268,15 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       ),
                       body: SafeArea(
                         bottom: false,
-                        child: IndexedStack(index: _currentIndex, children: _pages),
+                        child: FadeIndexedStack(index: _currentIndex, children: _pages),
                       ),
-                      bottomNavigationBar: _GlassBottomNav(
+                      bottomNavigationBar: AppBottomNav(
                         currentIndex: _currentIndex,
-                        isAddMenuOpen: _isAddMenuOpen,
-                        onTap: (i) => setState(() => _currentIndex = i),
-                        onAddTap: _toggleAddMenu,
+                        onTap: _onNavTap,
+                        onMoreTap: () => _scaffoldKey.currentState?.openDrawer(),
+                        transactionsBadgeCount: _transactionsBadgeCount,
+                        inventoryBadgeCount: _inventoryBadgeCount,
+                        contentHeight: _kBarContentHeight,
                       ),
                     ),
                   ),
@@ -259,6 +295,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ),
           ),
         ),
+        // Floating "New transaction" pill --- separate from the bar, anchored
+        // to the right edge, floating just above it. Dashboard-only.
+        if (_currentIndex == 0 && !_isDrawerOpen)
+          Positioned(
+            right: 16,
+            bottom: pillBottom,
+            child: TransactionPill(isSelected: _isAddMenuOpen, onTap: _toggleAddMenu),
+          ),
         _buildQuickAddMenu(),
       ],
     );
@@ -268,10 +312,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 // ============================================================================
 // DASHBOARD PAGE
 // ============================================================================
-
 class DashboardPage extends StatefulWidget {
   final ValueChanged<bool>? onFilterSheetOpenChanged;
-
   const DashboardPage({super.key, this.onFilterSheetOpenChanged});
 
   @override
@@ -296,12 +338,6 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    // 👉 FIX: seed a real date range for the default period ('Today')
-    // *before* the first fetch. Previously this stayed null until the
-    // user opened the filter sheet, so the very first request went out
-    // as period="Today" with no startDate/endDate — which the backend's
-    // textual fallback didn't recognize, silently returning unfiltered,
-    // all-time data while the label still read "Today".
     _customRange = DatePeriodUtils.calculateDatesForPeriod(_selectedPeriod);
     _fetchData();
   }
@@ -333,7 +369,6 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  // 👉 DYNAMIC DISPLAY LABEL LOGIC
   String _getDisplayLabel() {
     if (_customRange != null && _selectedPeriod == 'Custom Date') {
       const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -373,7 +408,6 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(height: 20),
               const Text('DATE RANGE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.8)),
               const SizedBox(height: 10),
-              // 👉 USING THE NEW REUSABLE DATE COMPONENT
               RecordDateFilter(
                 filter: RecordFilter(
                   period: _selectedPeriod == 'Custom Date' ? null : _selectedPeriod,
@@ -505,7 +539,6 @@ class _DashboardPageState extends State<DashboardPage> {
                     children: [
                       const Icon(Icons.calendar_today_rounded, size: 12, color: _kDashAccent),
                       const SizedBox(width: 6),
-                      // 👉 USING THE NEW LABEL METHOD
                       Text(
                         _getDisplayLabel(),
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kDashAccent),
@@ -542,29 +575,19 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-class AddNewContentPage extends StatelessWidget {
-  const AddNewContentPage({super.key});
-
-  @override
-  Widget build(BuildContext context) => const Center(child: Text('Add New Content'));
-}
-
 // ============================================================================
-// QUICK-ADD SPEED-DIAL DATA + BUTTON
+// QUICK-ADD SPEED-DIAL DATA + BUTTON (unchanged)
 // ============================================================================
-
 class _QuickAddOption {
   final String label;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
-
   const _QuickAddOption({required this.label, required this.icon, required this.color, required this.onTap});
 }
 
 class _QuickAddButton extends StatelessWidget {
   final _QuickAddOption option;
-
   const _QuickAddButton({required this.option});
 
   @override
@@ -598,178 +621,5 @@ class _QuickAddButton extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// FLOATING LIQUID-GLASS BOTTOM NAV
-// ============================================================================
-
-class _GlassBottomNav extends StatelessWidget {
-  final int currentIndex;
-  final bool isAddMenuOpen;
-  final ValueChanged<int> onTap;
-  final VoidCallback onAddTap;
-
-  const _GlassBottomNav({required this.currentIndex, required this.isAddMenuOpen, required this.onTap, required this.onAddTap});
-
-  static const List<_NavItemData> _items = [
-    _NavItemData(index: 0, icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home'),
-    _NavItemData(index: 1, icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded, label: 'Receivables'),
-    _NavItemData(index: 3, icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart_rounded, label: 'Sales'),
-    _NavItemData(index: 4, icon: Icons.account_balance_wallet_outlined, activeIcon: Icons.account_balance_wallet_rounded, label: 'Payables'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(child: _GlassPill(currentIndex: currentIndex, onTap: onTap, items: _items)),
-            const SizedBox(width: 12),
-            _GlassAddButton(isSelected: isAddMenuOpen, onTap: onAddTap),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItemData {
-  final int index;
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-
-  const _NavItemData({required this.index, required this.icon, required this.activeIcon, required this.label});
-}
-
-class _GlassPill extends StatelessWidget {
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-  final List<_NavItemData> items;
-
-  const _GlassPill({required this.currentIndex, required this.onTap, required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    final selectedPos = items.indexWhere((e) => e.index == currentIndex);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(32),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          height: 64,
-          decoration: BoxDecoration(
-            color: const Color(0xFF15171C).withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 1),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 24, offset: const Offset(0, 10))],
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final itemWidth = constraints.maxWidth / items.length;
-              return Stack(
-                children: [
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 420),
-                    curve: Curves.easeOutBack,
-                    left: selectedPos >= 0 ? itemWidth * selectedPos + 6 : 0,
-                    top: 6, bottom: 6, width: itemWidth - 12,
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 200),
-                      opacity: selectedPos >= 0 ? 1 : 0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Row(
-                    children: items.map((item) {
-                      final selected = item.index == currentIndex;
-                      return SizedBox(
-                        width: itemWidth, height: 64,
-                        child: InkWell(
-                          onTap: () => onTap(item.index),
-                          borderRadius: BorderRadius.circular(24),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 200),
-                                transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-                                child: Icon(selected ? item.activeIcon : item.icon, key: ValueKey(selected), size: 22,
-                                  color: selected ? Colors.white : Colors.white.withValues(alpha: 0.55),
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 10.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                  color: selected ? Colors.white : Colors.white.withValues(alpha: 0.55),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassAddButton extends StatelessWidget {
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _GlassAddButton({required this.isSelected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            width: 64, height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFF4F46E5).withValues(alpha: isSelected ? 0.38 : 0.24),
-                  const Color(0xFF9333EA).withValues(alpha: isSelected ? 0.38 : 0.24),
-                ],
-              ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
-              boxShadow: [
-                BoxShadow(color: const Color(0xFF4F46E5).withValues(alpha: isSelected ? 0.22 : 0.12), blurRadius: isSelected ? 16 : 10, spreadRadius: isSelected ? 1 : 0, offset: const Offset(0, 4)),
-              ],
-            ),
-            child: AnimatedRotation(
-              duration: const Duration(milliseconds: 250),
-              turns: isSelected ? 0.125 : 0,
-              child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// Nav-chrome widgets (bottom bar, floating pill) now live in
+// shared/widgets/app_bottom_nav.dart --- see the import above.

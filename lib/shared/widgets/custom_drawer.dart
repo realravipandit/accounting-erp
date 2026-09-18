@@ -12,7 +12,8 @@ import 'package:sas_app/features/company/company_selection_screen.dart';
 import 'package:sas_app/features/ledger/ledger_master_screen.dart';
 import 'package:sas_app/features/inventory/item_master_screen.dart';
 import 'package:sas_app/features/sales/sales_entry_screen.dart';
-import 'package:sas_app/features/sales/sales_entry_pos_screen.dart'; // 👈 NEW --- adjust path/class name to your actual POS screen
+import 'package:sas_app/features/sales/sales_entry_pos_screen.dart'; // 👈 NEW --- adjust path/class name to your actual POS
+import 'package:sas_app/features/sales/sales_order_list_screen.dart';
 import 'package:sas_app/features/purchase/purchase_entry_screen.dart';
 import 'package:sas_app/features/sales/sales_order_entry_screen.dart';
 import 'package:sas_app/features/ledger/ledger_report_screen.dart';
@@ -169,11 +170,12 @@ class CustomDrawer extends StatelessWidget {
                   ),
                   buildStyledExpansionTile(
                     context,
-                    title: 'Financial Reports',
+                    title: 'Reports',
                     icon: Icons.bar_chart_rounded,
                     iconBgColor: Colors.blue.shade50,
                     iconColor: Colors.blue.shade700,
                     items: [
+                      {'title': 'Sales Order Report', 'page': const SalesOrderListScreen()},
                       {'title': 'Receivables', 'page': const ReceivableScreen()},
                       {'title': 'Payables', 'page': const PayableScreen()},
                       {'title': 'Ledger Report', 'page': const LedgerReportPage()},
