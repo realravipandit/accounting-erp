@@ -26,18 +26,17 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
   late DateTime _selectedAdDate;
 
   bool _isTaxInvoice = false;
-
   List<Map<String, dynamic>> _counters = [];
   String? _selectedCounterName;
-  Map<String, dynamic>? _selectedCustomer;
 
+  Map<String, dynamic>? _selectedCustomer;
   final List<Map<String, dynamic>> _cartItems = [];
+
   List<dynamic> _termMasters = [];
   List<Map<String, dynamic>> _billWiseTerms = [];
 
   double _subTotal = 0.0;
   double _grandTotal = 0.0;
-
   final int _paymentLedgerId = 1;
 
   // Which bottom button is currently mid-save: 'complete', 'preview', or null.
@@ -138,9 +137,11 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
       var bt = _billWiseTerms[i];
       if (bt['sign'] == '-') {
         if (manualIndex == i) bt['isManualAmount'] = !isPercentChange;
+
         if (bt['isActive']) {
           double amt = 0.0;
           bool isManual = bt['isManualAmount'] ?? false;
+
           if (isManual) {
             amt = double.tryParse(bt['amountController'].text) ?? 0.0;
             if (tempSub > 0) bt['percentController'].text = ((amt / tempSub) * 100).toStringAsFixed(2);
@@ -177,6 +178,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
 
   void _handleBarcodeSearch(String val) {
     if (val.trim().isEmpty) return;
+
     final query = val.trim().toLowerCase();
     final match = _cachedItems.firstWhere(
       (i) => (i['ItemCode'] ?? i['itemCode'] ?? '').toString().toLowerCase() == query ||
@@ -202,6 +204,8 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
       } else {
         _cartItems.add({
           'id': itemId,
+          // Item's default unit, pulled silently from tblItems (no picker in UI)
+          'unitId': match['UnitID'] ?? match['unitId'],
           'name': itemName,
           'price': itemRate,
           'qty': 1.0,
@@ -478,6 +482,8 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
                     setState(() {
                       final updatedItem = {
                         'id': item['ItemID'] ?? item['itemId'],
+                        // Item's default unit, pulled silently from tblItems (no picker in UI)
+                        'unitId': item['UnitID'] ?? item['unitId'],
                         'name': itemName,
                         'price': double.tryParse(rateCtrl.text) ?? 0.0,
                         'qty': double.tryParse(qtyCtrl.text) ?? 1.0,
@@ -495,6 +501,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
                         }).toList(),
                         'originalItem': item,
                       };
+
                       if (isEditing && existingIndex != null) {
                         _cartItems[existingIndex] = updatedItem;
                       } else {
@@ -527,7 +534,6 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
     if (!mounted) return;
 
     final TextEditingController searchController = TextEditingController();
-
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -636,6 +642,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
       (c) => (c['ClassName'] ?? c['className'] ?? '').toString() == _selectedCounterName,
       orElse: () => {},
     );
+
     final int? resolvedClassId = selectedCounterObj['ClassID'] ??
                                  selectedCounterObj['classID'] ??
                                  selectedCounterObj['ClassId'] ??
@@ -654,6 +661,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
     final formattedItems = _cartItems.map((item) {
       return {
         'itemId': item['id'],
+        'unitId': item['unitId'],
         'qty': item['qty'],
         'rate': item['price'],          // Inclusive Rate
         'amount': item['totalAmount'],  // Inclusive Amount
@@ -700,6 +708,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
     try {
       final result = await _posService.submitPosSale(payload);
       if (!mounted) return null;
+
       if (result['success'] == true) {
         return result;
       } else {
@@ -718,10 +727,12 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
   /// popup with the bill details, then resets the form.
   Future<void> _completeSale() async {
     final double tenderAmount = double.tryParse(_tenderController.text) ?? _grandTotal;
+
     setState(() => _loadingButton = 'complete');
     final result = await _processSale();
     if (result == null) return;
     if (!mounted) return;
+
     setState(() => _loadingButton = null);
     await _showSaleCompletedDialog(result, tenderAmount);
   }
@@ -730,9 +741,11 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
   /// (this is what the single "Complete Sale" button used to do).
   Future<void> _completeSaleAndPreview() async {
     final double tenderAmount = double.tryParse(_tenderController.text) ?? _grandTotal;
+
     setState(() => _loadingButton = 'preview');
     final result = await _processSale();
     if (result == null) return;
+
     await _navigateToPdfPreview(result, tenderAmount);
   }
 
@@ -853,7 +866,6 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
           : netLineInclusive;
 
       calculatedTaxableValue += lineTaxableAmount;
-
       double rateBeforeTax = qty > 0 ? lineTaxableAmount / qty : 0.0;
 
       processedItems.add({
@@ -868,10 +880,12 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
     Map<String, dynamic> transactionData = {
       'companyInfo': companyInfo,
       'customerName': _selectedCustomer == null ? 'Cash Party' : (_selectedCustomer!['LedgerName'] ?? 'Cash Party'),
+
       // THIS IS THE FIX FOR THE ADDRESS: It checks all possible database keys for the address
       'customerAddress': _selectedCustomer == null
           ? ''
           : (_selectedCustomer!['LedgerAddress'] ?? ''),
+
       'printStatus': 'Original',
       'voucherId': voucherId,
       'miti': _dateController.text,
@@ -882,8 +896,10 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
       'amountInWords': 'Rs. ${_numberToWords(_grandTotal.toInt())} only',
       'paymentMode': 'Cash',
       'counter': _selectedCounterName ?? 'MAIN',
+
       // THIS IS THE FIX FOR THE CASHIER: It dynamically pulls the logged-in user code
       'cashier': result['cashier'] ?? 'ADMIN',
+
       'time': DateFormat('h:mm a').format(DateTime.now()),
       'remarks': _remarksController.text,
       'items': processedItems,
@@ -1173,6 +1189,7 @@ class _SalesEntryPosScreenState extends State<SalesEntryPosScreen> {
                       int index = entry.key;
                       var term = entry.value;
                       bool isVat = term['sign'] == '+';
+
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: Row(
@@ -1448,6 +1465,7 @@ class _ItemSearchPageState extends State<ItemSearchPage> {
                       final name = (item['ItemName'] ?? item['itemName'] ?? 'Unknown').toString();
                       final code = (item['ItemCode'] ?? item['itemCode'] ?? '').toString();
                       final rate = (item['SalesRate'] ?? item['salesRate'] ?? '0').toString();
+
                       return ListTile(
                         leading: CircleAvatar(
                           backgroundColor: widget.primaryColor.withValues(alpha: 0.1),

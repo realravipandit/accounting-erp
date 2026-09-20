@@ -3,26 +3,20 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 // ============================================================================
-// NORMAL SALES INVOICE PDF (A4, multi-page)
+// SALES ORDER PDF (A4, multi-page)
 //
-// Same structure as SalesOrderPdf's multi-page version:
 //   * A4 sizing: margin 30, body 10 / bold 10.5, company name 18, title 13.5
-//   * pw.MultiPage: rows flow to further pages on their own
-//   * page 1 only: company header, "SALES INVOICE" title, invoice no/date,
-//     customer/miti, address (no status line)
-//   * page 2+: small "Invoice No: ... (contd.)" line + repeated column header
+//   * pw.MultiPage: rows flow to further pages on their own based on content
+//     height, not a fixed item count
+//   * page 1 only: company header, "SALES ORDER" title, order no/date,
+//     customer/miti, address, status
+//   * page 2+: small "Order No: ... (contd.)" line + repeated column header
 //   * footer: "Page x of y", shown only when there is more than one page
 //   * totals block, remarks and the generated-by note sit after the last
 //     row, on the last page
-//
-// Expects the transactionData map built by SaleDetailsSheet._resolveInvoiceData():
-//   companyInfo, voucherId, date, miti, customerName, customerAddress,
-//   basicAmount, netAmount, remarks,
-//   items:     [{sno, itemName, unit, qty, rate, termAmount, amount}]
-//   billTerms: [{name, amount}]   (amount is signed, e.g. "-96.76")
 // ============================================================================
 
-class NormalSalesPdf {
+class SalesOrderPdf {
   static Future<Uint8List> generate(Map<String, dynamic> data) async {
     final pdf = pw.Document();
 
@@ -63,7 +57,7 @@ class NormalSalesPdf {
 
     final String customerName = data['customerName'] ?? 'Cash Party';
     final String customerAddress = data['customerAddress'] ?? '';
-    final String voucherId = '${data['voucherId'] ?? ''}';
+    final String orderNumber = '${data['orderNumber'] ?? ''}';
 
     // --- table header row, reused on page 1 and every continuation page ---
     pw.Widget tableHeaderRow() => pw.Row(
@@ -97,13 +91,13 @@ class NormalSalesPdf {
                   pw.Center(child: pw.Text('Ph: $phone${email.isNotEmpty ? ' | Email: $email' : ''}', style: bodyStyle)),
                 if (panNo.isNotEmpty) pw.Center(child: pw.Text('VAT/PAN NO: $panNo', style: bodyStyle)),
                 pw.SizedBox(height: 6),
-                pw.Center(child: pw.Text('SALES INVOICE', style: titleStyle)),
+                pw.Center(child: pw.Text('SALES ORDER', style: titleStyle)),
                 pw.SizedBox(height: 8),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('Invoice No: $voucherId', style: bodyStyle),
-                    pw.Text('Date: ${data['date'] ?? ''}', style: bodyStyle),
+                    pw.Text('Order No: $orderNumber', style: bodyStyle),
+                    pw.Text('Date: ${data['orderDate'] ?? ''}', style: bodyStyle),
                   ],
                 ),
                 pw.SizedBox(height: 3),
@@ -111,10 +105,12 @@ class NormalSalesPdf {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text('Customer: $customerName', style: bodyStyle),
-                    pw.Text('Miti : ${data['miti'] ?? ''}', style: bodyStyle),
+                    pw.Text('miti : ${data['miti'] ?? ''}', style: bodyStyle),
                   ],
                 ),
                 if (customerAddress.isNotEmpty) pw.Text('Address: $customerAddress', style: bodyStyle),
+                pw.SizedBox(height: 3),
+                pw.Text('Status: ${data['status'] ?? ''}', style: boldStyle),
                 dashedLine(),
                 tableHeaderRow(),
                 dashedLine(),
@@ -125,7 +121,7 @@ class NormalSalesPdf {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text('Invoice No: $voucherId (contd.)', style: smallStyle),
+              pw.Text('Order No: $orderNumber (contd.)', style: smallStyle),
               pw.SizedBox(height: 4),
               tableHeaderRow(),
               dashedLine(),
@@ -196,7 +192,7 @@ class NormalSalesPdf {
             dashedLine(),
           ],
           pw.SizedBox(height: 3),
-          pw.Center(child: pw.Text('This is a computer generated Sales Invoice', style: pw.TextStyle(fontSize: 8.5, fontStyle: pw.FontStyle.italic))),
+          pw.Center(child: pw.Text('This is a computer generated Sales Order', style: pw.TextStyle(fontSize: 8.5, fontStyle: pw.FontStyle.italic))),
         ],
       ),
     );

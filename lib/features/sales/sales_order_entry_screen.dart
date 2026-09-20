@@ -124,8 +124,8 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
     for (var item in _cartItems) {
       double lineTotal = item['totalAmount'] ?? 0.0;
       tempSub += lineTotal;
-      bool hasItemVat = false;
 
+      bool hasItemVat = false;
       if (item['itemTerms'] != null) {
         for (var t in item['itemTerms']) {
           if (t['termName'].toString().toUpperCase().contains('VAT')) {
@@ -279,7 +279,6 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
                                 final code = (c['LedgerCode'] ?? c['ledgerCode'] ?? '').toString();
                                 final isSelected = _selectedCustomer != null &&
                                     (_selectedCustomer!['LedgerID'] ?? _selectedCustomer!['ledgerID']) == (c['LedgerID'] ?? c['ledgerID']);
-
                                 return ListTile(
                                   leading: CircleAvatar(
                                     backgroundColor: _primaryColor.withValues(alpha: 0.1),
@@ -324,6 +323,7 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
         ),
       ),
     );
+
     if (selectedItem != null && mounted) {
       _showAddBillingItemDialog(selectedItem);
     }
@@ -499,6 +499,8 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
                   setState(() {
                     _cartItems.add({
                       'id': item['ItemID'] ?? item['itemId'],
+                      // Item's default unit, pulled silently from tblItems (no picker in UI)
+                      'unitId': item['UnitID'] ?? item['unitId'],
                       'name': itemName,
                       'price': double.tryParse(rateCtrl.text) ?? 0.0,
                       'qty': double.tryParse(qtyCtrl.text) ?? 1.0,
@@ -745,8 +747,8 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
     }
 
     final ledgerId = _selectedCustomer != null ? (_selectedCustomer!['LedgerID'] ?? _selectedCustomer!['ledgerID']) : null;
-    final customerNameStr = _selectedCustomer != null 
-        ? (_selectedCustomer!['LedgerName'] ?? _selectedCustomer!['ledgerName']).toString() 
+    final customerNameStr = _selectedCustomer != null
+        ? (_selectedCustomer!['LedgerName'] ?? _selectedCustomer!['ledgerName']).toString()
         : 'Walk-in Customer';
 
     // Same structure as Sales Payload, mapped to Sales Order backend logic
@@ -760,6 +762,7 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
       'items': _cartItems.map((item) {
         return {
           'itemId': item['id'],
+          'unitId': item['unitId'],
           'qty': item['qty'],
           'rate': item['price'],
           'itemTerms': item['itemTerms'] ?? [],
@@ -779,7 +782,6 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
     try {
       // You will need to add `submitSalesOrder` to your SalesService
       final result = await _salesService.submitSalesOrder(payload);
-      
       if (!mounted) return;
       setState(() => _isSaving = false);
 
@@ -1201,6 +1203,7 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
     final double qty = double.tryParse(item['qty'].toString()) ?? 0;
     final double price = double.tryParse(item['price'].toString()) ?? 0;
     final double total = double.tryParse(item['totalAmount'].toString()) ?? 0;
+
     final double gross = qty * price;
     final double disc = (gross - total).clamp(0.0, double.infinity);
     final double discPct = gross > 0 ? (disc / gross) * 100 : 0;

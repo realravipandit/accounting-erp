@@ -23,6 +23,7 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
 
   Map<String, dynamic>? _selectedCustomer;
   final List<Map<String, dynamic>> _cartItems = [];
+
   String _paymentModeLabel = 'Cash';
   int? _paymentLedgerId;
 
@@ -103,7 +104,6 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
         child: child!,
       ),
     );
-
     if (picked != null && mounted) {
       setState(() {
         _selectedNepaliDate = picked;
@@ -130,7 +130,6 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
           }
         }
       }
-
       // Add to taxable total
       if (!hasItemVat) tempTaxable += lineTotal;
     }
@@ -480,7 +479,6 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
                                 final code = (c['LedgerCode'] ?? c['ledgerCode'] ?? '').toString();
                                 final isSelected = _selectedCustomer != null &&
                                     (_selectedCustomer!['LedgerID'] ?? _selectedCustomer!['ledgerID']) == (c['LedgerID'] ?? c['ledgerID']);
-
                                 return ListTile(
                                   leading: CircleAvatar(
                                     backgroundColor: _primaryColor.withValues(alpha: 0.1),
@@ -585,7 +583,6 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
                 term['amountController'].clear();
               }
             }
-
             setDlg(() {
               dialogNetTotal = currentTotal;
             });
@@ -703,6 +700,8 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
                   setState(() {
                     _cartItems.add({
                       'id': item['ItemID'] ?? item['itemId'],
+                      // Item's default unit, pulled silently from tblItems (no picker in UI)
+                      'unitId': item['UnitID'] ?? item['unitId'],
                       'name': itemName,
                       'price': double.tryParse(rateCtrl.text) ?? 0.0,
                       'qty': double.tryParse(qtyCtrl.text) ?? 1.0,
@@ -796,7 +795,6 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
                 term['amountController'].clear();
               }
             }
-
             setDlg(() {
               dialogNetTotal = currentTotal;
             });
@@ -970,6 +968,7 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
       'items': _cartItems.map((item) {
         return {
           'itemId': item['id'],
+          'unitId': item['unitId'],
           'qty': item['qty'],
           'rate': item['price'],
           'itemTerms': item['itemTerms'] ?? [],
@@ -1175,7 +1174,6 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> {
     _invoiceController.dispose();
     _dateController.dispose();
     _remarksController.dispose();
-
     // Dispose term controllers
     for (var t in _billWiseTerms) {
       t['percentController']?.dispose();

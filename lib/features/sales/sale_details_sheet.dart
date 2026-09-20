@@ -63,6 +63,24 @@ class SaleDetailsSheet extends StatelessWidget {
     }
   }
 
+  // Customer name for the normal invoice PDF. Invoices from the legacy
+  // software can have a blank/NULL PartyName (the name lives on the ledger),
+  // so fall back to the customerName the list already resolved for this row
+  // (PartyName, else tblLedger.LedgerName) --- the same value the sheet shows.
+  String _resolveCustomerName(Map<String, dynamic> master) {
+    final party = master['PartyName']?.toString().trim() ?? '';
+    if (party.isNotEmpty && party.toLowerCase() != 'cash') return party;
+
+    // Ledger name from the same details fetch (needs the updated backend).
+    final ledgerName = master['customerLedgerName']?.toString().trim() ?? '';
+    if (ledgerName.isNotEmpty) return ledgerName;
+
+    final fromList = (saleData['customerName'] ?? saleData['LedgerName'] ?? '').toString().replaceAll('\n', ' ').trim();
+    if (fromList.isNotEmpty) return fromList;
+
+    return party.isNotEmpty ? party : 'Cash Party';
+  }
+
   // Shared by both buttons: fetch the full record, resolve invoice type,
   // and build the transactionData map the PDF templates expect.
   Future<({Map<String, dynamic> transactionData, String invoiceType, String voucherId})> _resolveInvoiceData() async {
@@ -89,21 +107,24 @@ class SaleDetailsSheet extends StatelessWidget {
       (t) => (t['Sign']?.toString() ?? t['sign']?.toString() ?? '') == '+',
       orElse: () => null,
     );
-
     final double vatRate = vatTerm != null
         ? (double.tryParse(vatTerm['Rate']?.toString() ?? vatTerm['rate']?.toString() ?? '0') ?? 0.0)
         : 0.0;
     final double vatAmount = vatTerm != null
         ? (double.tryParse(vatTerm['Amount']?.toString() ?? vatTerm['amount']?.toString() ?? '0') ?? 0.0)
         : 0.0;
+
     final double effectiveVatRate = vatRate > 0 ? vatRate : 13.0;
 
     final double netAmount = double.tryParse(master['NetAmount']?.toString() ?? '0') ?? 0.0;
     final double basicAmount = double.tryParse(master['BasicAmount']?.toString() ?? '0') ?? 0.0;
     final double taxableValue = invoiceType == 'tax' ? (netAmount - vatAmount) : 0.0;
 
-    // --- Items: redo the same tax back-out SalesEntryPosScreen does at
-    // creation time, and pass through the unit name too ---
+    // --- Items ---
+    // 'tax' / 'abbr': redo the same tax back-out SalesEntryPosScreen does at
+    // creation time, and pass through the unit name too.
+    // 'normal': sales-order-style rows --- real rate, unit code, signed
+    // item-wise term total (Term Amt) and the saved line net (Amount).
     final List<Map<String, dynamic>> processedItems = [];
     for (int i = 0; i < rawItems.length; i++) {
       final raw = rawItems[i] as Map<String, dynamic>;
@@ -112,6 +133,32 @@ class SaleDetailsSheet extends StatelessWidget {
             raw['NetAmount']?.toString() ?? raw['amount']?.toString() ?? '0',
           ) ??
           0.0;
+
+      if (invoiceType == 'normal') {
+        final double rate = double.tryParse(raw['Rate']?.toString() ?? '0') ?? 0.0;
+
+        final itemTerms = raw['itemTerms'] is List ? raw['itemTerms'] as List : [];
+        double termTotal = 0.0;
+        for (final t in itemTerms) {
+          final double amt = double.tryParse(t['termAmount']?.toString() ?? '0') ?? 0.0;
+          final bool isDeduction = (t['termSign']?.toString().trim() ?? '+') == '-';
+          termTotal += isDeduction ? -amt : amt;
+        }
+
+        final unit = (raw['unitCode'] ?? raw['UnitCode'] ?? raw['unitName'] ?? raw['UnitName'] ?? '').toString().trim();
+
+        processedItems.add({
+          'sno': i + 1,
+          'itemName': raw['productName']?.toString() ?? raw['ItemName']?.toString() ?? '',
+          'unit': unit,
+          'qty': qty.toStringAsFixed(qty.truncateToDouble() == qty ? 0 : 2),
+          'rate': rate.toStringAsFixed(2),
+          'termAmount': termTotal.toStringAsFixed(2),
+          'amount': lineAmount.toStringAsFixed(2),
+        });
+        continue;
+      }
+
       final double taxAdjustedAmount = (invoiceType == 'tax' && effectiveVatRate > 0)
           ? lineAmount / (1 + (effectiveVatRate / 100))
           : lineAmount;
@@ -127,6 +174,27 @@ class SaleDetailsSheet extends StatelessWidget {
       });
     }
 
+    // --- Bill terms for the normal invoice PDF: "BDISCOUNT (5%)" / "-96.76" ---
+    // Built from the same `terms` list (View_DynamicSITerms) the on-screen
+    // sheet shows, so the PDF matches the screen. Zero-amount terms
+    // (e.g. ROUNDOFF rows) are skipped, same as the sheet does.
+    final List<Map<String, String>> billTerms = [];
+    for (final t in terms) {
+      final double amt = double.tryParse(t['Amount']?.toString() ?? t['amount']?.toString() ?? '0') ?? 0.0;
+      if (amt == 0) continue;
+
+      final rawName = (t['TermName']?.toString() ?? t['termName']?.toString() ?? '').trim();
+      final name = rawName.isNotEmpty ? rawName : 'Term';
+      final double rate = double.tryParse(t['Rate']?.toString() ?? t['rate']?.toString() ?? '0') ?? 0.0;
+      final bool isDeduction = (t['Sign']?.toString() ?? t['sign']?.toString() ?? '+').trim() == '-';
+      final String rateStr = rate == rate.truncateToDouble() ? rate.toStringAsFixed(0) : rate.toStringAsFixed(2);
+
+      billTerms.add({
+        'name': rate > 0 ? '$name ($rateStr%)' : name,
+        'amount': (isDeduction ? -amt : amt).toStringAsFixed(2),
+      });
+    }
+
     Map<String, dynamic> companyInfo = {};
     try {
       companyInfo = await PosSalesService().fetchActiveCompanyProfile();
@@ -138,9 +206,12 @@ class SaleDetailsSheet extends StatelessWidget {
     final transactionData = <String, dynamic>{
       'companyInfo': companyInfo,
       'voucherId': master['VoucherID']?.toString() ?? voucherId,
+      'date': DateUtil.formatDate(master['VoucherDate']?.toString()),
       'miti': master['VoucherMiti']?.toString() ?? '',
       'time': DateUtil.formatTime(master['VoucherTime']?.toString()),
-      'customerName': master['PartyName']?.toString() ?? 'Cash Party',
+      'customerName': invoiceType == 'normal'
+          ? _resolveCustomerName(master)
+          : (master['PartyName']?.toString() ?? 'Cash Party'),
       'customerAddress': master['customerAddress']?.toString() ?? '',
       'counter': master['counterName']?.toString() ?? master['ClassID']?.toString() ?? '',
       'cashier': master['PrintedBy']?.toString() ?? '',
@@ -153,6 +224,7 @@ class SaleDetailsSheet extends StatelessWidget {
       'returnAmount': (double.tryParse(master['ReturnAmount']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2),
       'remarks': master['Remarks']?.toString() ?? '',
       'items': processedItems,
+      'billTerms': billTerms,
       'amountInWords': 'Rs. ${AmountToWords.convert(netAmount.toInt())} only',
       'printStatus': 'Original',
       'taxExemptedValue': '0.00',
@@ -173,6 +245,7 @@ class SaleDetailsSheet extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
+
     try {
       final resolved = await _resolveInvoiceData();
       if (context.mounted) {
@@ -209,10 +282,15 @@ class SaleDetailsSheet extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
+
     try {
       final resolved = await _resolveInvoiceData();
       final bytes = await PdfGeneratorService.generateInvoice(resolved.transactionData, resolved.invoiceType);
-      await PdfService.sharePdfBytes(bytes, fileName: '${resolved.voucherId}.pdf');
+      // File name: salesinvoice_<voucher no>.pdf, e.g. salesinvoice_SI-000028.pdf.
+      // Characters that are not allowed in file names (\ / : * ? " < > |)
+      // are replaced with '-'.
+      final safeVoucher = resolved.voucherId.replaceAll(RegExp(r'[\\/:*?"<>|]'), '-');
+      await PdfService.sharePdfBytes(bytes, fileName: 'salesinvoice_$safeVoucher.pdf');
       if (context.mounted) Navigator.pop(context);
     } catch (e) {
       if (context.mounted) {
@@ -260,6 +338,7 @@ class SaleDetailsSheet extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
                 child: Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: _kBorder, borderRadius: BorderRadius.circular(10)))),
               ),
+
               // CLOSE BUTTON
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -278,6 +357,7 @@ class SaleDetailsSheet extends StatelessWidget {
                   ],
                 ),
               ),
+
               // RECEIPT BODY
               Expanded(
                 child: ListView(
@@ -319,14 +399,17 @@ class SaleDetailsSheet extends StatelessWidget {
                             const SizedBox(height: 16),
                             const _DashedLine(),
                             const SizedBox(height: 14),
+
                             _CopyableMetaRow(label: 'Invoice No.', value: invoiceNo),
                             const SizedBox(height: 6),
-                            Row(children: [const SizedBox(width: 80, child: Text('Date', style: TextStyle(fontSize: 12.5, color: _kMuted))), Expanded(child: Text(timeStr.isNotEmpty ? '$dateStr $timeStr' : dateStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)))]),
+                            Row(children: [const SizedBox(width: 80, child: Text('Date', style: TextStyle(fontSize: 12.5, color: _kMuted))), Expanded(child: Text(timeStr.isNotEmpty ? '$dateStr  $timeStr' : dateStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)))]),
                             const SizedBox(height: 6),
                             Row(children: [const SizedBox(width: 80, child: Text('Items', style: TextStyle(fontSize: 12.5, color: _kMuted))), Expanded(child: Text('${items.length}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)))]),
+
                             const SizedBox(height: 14),
                             const _DashedLine(),
                             const SizedBox(height: 14),
+
                             const Row(
                               children: [
                                 Expanded(flex: 4, child: Text('ITEM', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.6))),
@@ -337,6 +420,7 @@ class SaleDetailsSheet extends StatelessWidget {
                               ],
                             ),
                             const SizedBox(height: 10),
+
                             if (items.isEmpty)
                               const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Center(child: Text('No line items recorded', style: TextStyle(color: _kMuted, fontSize: 13))))
                             else
@@ -344,9 +428,10 @@ class SaleDetailsSheet extends StatelessWidget {
                                 final itemName = item['productName']?.toString() ?? item['ItemName']?.toString() ?? 'Unknown Item';
                                 final qty = item['Qty']?.toString() ?? '0';
                                 final unit = (item['unitCode'] ?? item['UnitCode'] ?? '').toString().trim();
-                                final qtyDisplay = unit.isNotEmpty ? '$qty $unit' : qty;
+                                final qtyDisplay = unit.isNotEmpty ? '$qty  $unit' : qty;
                                 final rate = item['Rate']?.toString() ?? '0.00';
                                 final amount = item['amount']?.toString() ?? item['NetAmount']?.toString() ?? '0.00';
+
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 10),
                                   child: Row(
@@ -361,24 +446,30 @@ class SaleDetailsSheet extends StatelessWidget {
                                   ),
                                 );
                               }),
+
                             const SizedBox(height: 8),
                             const _DashedLine(),
                             const SizedBox(height: 14),
+
                             // --- DYNAMIC TOTALS BREAKDOWN ---
                             _TotalsRow(label: 'Subtotal', value: 'Rs. ${_formatCurrency(subtotal.toString())}'),
                             const SizedBox(height: 6),
+
                             if (terms.isNotEmpty)
                               ...terms.map((t) {
                                 final tName = t['TermName']?.toString() ?? t['termName']?.toString() ?? 'Adjustment';
                                 final tRate = double.tryParse(t['Rate']?.toString() ?? t['rate']?.toString() ?? '0') ?? 0.0;
                                 final tAmt = double.tryParse(t['Amount']?.toString() ?? t['amount']?.toString() ?? '0') ?? 0.0;
                                 final sign = t['Sign']?.toString() ?? t['sign']?.toString() ?? '+';
+
                                 if (tAmt == 0) return const SizedBox.shrink();
+
                                 String displayLabel = tName;
                                 if (tRate > 0) {
                                   String rateStr = tRate == tRate.truncateToDouble() ? tRate.toInt().toString() : tRate.toString();
                                   displayLabel = '$tName ($rateStr%)';
                                 }
+
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 6),
                                   child: _TotalsRow(
@@ -387,9 +478,11 @@ class SaleDetailsSheet extends StatelessWidget {
                                   ),
                                 );
                               }),
+
                             const SizedBox(height: 10),
                             const _DashedLine(),
                             const SizedBox(height: 10),
+
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -397,6 +490,7 @@ class SaleDetailsSheet extends StatelessWidget {
                                 Text('Rs. ${_formatCurrency(total.toString())}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _kSalesAccent)),
                               ],
                             ),
+
                             if (remarks != null && remarks.isNotEmpty) ...[
                               const SizedBox(height: 24),
                               Container(
@@ -412,6 +506,7 @@ class SaleDetailsSheet extends StatelessWidget {
                                 ),
                               ),
                             ],
+
                             const SizedBox(height: 24),
                             const _DashedLine(),
                             const SizedBox(height: 16),
@@ -423,6 +518,7 @@ class SaleDetailsSheet extends StatelessWidget {
                   ],
                 ),
               ),
+
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                 decoration: const BoxDecoration(color: _kBg),
@@ -540,7 +636,9 @@ class _DashedLinePainter extends CustomPainter {
     const dashWidth = 5.0;
     const dashSpace = 4.0;
     double startX = 0;
-    final paint = Paint()..color = _kBorder..strokeWidth = 1;
+    final paint = Paint()
+      ..color = _kBorder
+      ..strokeWidth = 1;
     while (startX < size.width) {
       canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
       startX += dashWidth + dashSpace;
@@ -557,6 +655,7 @@ class _ReceiptClipper extends CustomClipper<Path> {
     const double notch = 8;
     final path = Path();
     path.lineTo(0, size.height - notch);
+
     double x = 0;
     bool up = true;
     while (x < size.width) {
@@ -565,6 +664,7 @@ class _ReceiptClipper extends CustomClipper<Path> {
       up = !up;
       x = nextX;
     }
+
     path.lineTo(size.width, 0);
     path.close();
     return path;
