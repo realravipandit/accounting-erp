@@ -21,6 +21,7 @@ const _kText = Color(0xFF1E2025);
 // affordances. Matches sale_screen.dart so list → detail feels like
 // one continuous screen.
 const _kSalesAccent = Color(0xFF0F6E56);
+
 const _kPaid = Color(0xFF1E8E5A);
 const _kPaidBg = Color(0xFFE6F5EE);
 const _kPending = Color(0xFFB8860B);
@@ -88,6 +89,7 @@ class SaleDetailsSheet extends StatelessWidget {
       (t) => (t['Sign']?.toString() ?? t['sign']?.toString() ?? '') == '+',
       orElse: () => null,
     );
+
     final double vatRate = vatTerm != null
         ? (double.tryParse(vatTerm['Rate']?.toString() ?? vatTerm['rate']?.toString() ?? '0') ?? 0.0)
         : 0.0;
@@ -118,7 +120,7 @@ class SaleDetailsSheet extends StatelessWidget {
       processedItems.add({
         'sno': i + 1,
         'itemName': raw['productName']?.toString() ?? raw['ItemName']?.toString() ?? '',
-        'unit': raw['unit']?.toString() ?? raw['Unit']?.toString() ?? '',
+        'unit': raw['unitName']?.toString() ?? raw['UnitName']?.toString() ?? '',
         'qty': qty.toString(),
         'rate': rateBeforeTax.toStringAsFixed(2),
         'amount': taxAdjustedAmount.toStringAsFixed(2),
@@ -129,7 +131,7 @@ class SaleDetailsSheet extends StatelessWidget {
     try {
       companyInfo = await PosSalesService().fetchActiveCompanyProfile();
     } catch (_) {
-      // Falls back to templates' own 'GMART' placeholder if this fails —
+      // Falls back to templates' own 'GMART' placeholder if this fails ---
       // matches SalesEntryPosScreen's own error handling for this call.
     }
 
@@ -171,7 +173,6 @@ class SaleDetailsSheet extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
-
     try {
       final resolved = await _resolveInvoiceData();
       if (context.mounted) {
@@ -208,7 +209,6 @@ class SaleDetailsSheet extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
-
     try {
       final resolved = await _resolveInvoiceData();
       final bytes = await PdfGeneratorService.generateInvoice(resolved.transactionData, resolved.invoiceType);
@@ -321,7 +321,7 @@ class SaleDetailsSheet extends StatelessWidget {
                             const SizedBox(height: 14),
                             _CopyableMetaRow(label: 'Invoice No.', value: invoiceNo),
                             const SizedBox(height: 6),
-                            Row(children: [const SizedBox(width: 80, child: Text('Date', style: TextStyle(fontSize: 12.5, color: _kMuted))), Expanded(child: Text(timeStr.isNotEmpty ? '$dateStr  $timeStr' : dateStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)))]),
+                            Row(children: [const SizedBox(width: 80, child: Text('Date', style: TextStyle(fontSize: 12.5, color: _kMuted))), Expanded(child: Text(timeStr.isNotEmpty ? '$dateStr $timeStr' : dateStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)))]),
                             const SizedBox(height: 6),
                             Row(children: [const SizedBox(width: 80, child: Text('Items', style: TextStyle(fontSize: 12.5, color: _kMuted))), Expanded(child: Text('${items.length}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)))]),
                             const SizedBox(height: 14),
@@ -343,7 +343,7 @@ class SaleDetailsSheet extends StatelessWidget {
                               ...items.map((item) {
                                 final itemName = item['productName']?.toString() ?? item['ItemName']?.toString() ?? 'Unknown Item';
                                 final qty = item['Qty']?.toString() ?? '0';
-                                final unit = (item['unit'] ?? item['Unit'] ?? '').toString().trim();
+                                final unit = (item['unitCode'] ?? item['UnitCode'] ?? '').toString().trim();
                                 final qtyDisplay = unit.isNotEmpty ? '$qty $unit' : qty;
                                 final rate = item['Rate']?.toString() ?? '0.00';
                                 final amount = item['amount']?.toString() ?? item['NetAmount']?.toString() ?? '0.00';
