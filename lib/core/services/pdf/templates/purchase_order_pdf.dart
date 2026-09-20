@@ -3,21 +3,13 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 // ============================================================================
-// SALES ORDER PDF (A4, multi-page)
-//
-//   * A4 sizing: margin 30, body 10 / bold 10.5, company name 18, title 13.5
-//   * pw.MultiPage: rows flow to further pages on their own based on content
-//     height, not a fixed item count
-//   * page 1 only: company header, "SALES ORDER" title, order no/date,
-//     customer/miti, customer address and PAN/VAT (each skipped when empty),
-//     status
-//   * page 2+: small "Order No: ... (contd.)" line + repeated column header
-//   * footer: "Page x of y", shown only when there is more than one page
-//   * totals block, remarks and the generated-by note sit after the last
-//     row, on the last page
+// PURCHASE ORDER PDF (A4, multi-page)
+// Same layout as SalesOrderPdf: margin 30, body 10 / bold 10.5, company 18,
+// title 13.5, repeated column header + "(contd.)" line, "Page x of y" footer.
+// Vendor address and PAN/VAT lines are skipped when empty.
 // ============================================================================
 
-class SalesOrderPdf {
+class PurchaseOrderPdf {
   static Future<Uint8List> generate(Map<String, dynamic> data) async {
     final pdf = pw.Document();
 
@@ -56,12 +48,11 @@ class SalesOrderPdf {
     final String phone = company['Phone'] ?? company['phone'] ?? '';
     final String email = company['Email'] ?? company['email'] ?? '';
 
-    final String customerName = data['customerName'] ?? 'Cash Party';
-    final String customerAddress = '${data['customerAddress'] ?? ''}'.trim();
-    final String customerPan = '${data['customerPan'] ?? ''}'.trim();
+    final String vendorName = data['vendorName'] ?? '';
+    final String vendorAddress = '${data['vendorAddress'] ?? ''}'.trim();
+    final String vendorPan = '${data['vendorPan'] ?? ''}'.trim();
     final String orderNumber = '${data['orderNumber'] ?? ''}';
 
-    // --- table header row, reused on page 1 and every continuation page ---
     pw.Widget tableHeaderRow() => pw.Row(
           children: [
             pw.Expanded(flex: 1, child: pw.Text('SN.', style: boldStyle)),
@@ -77,10 +68,6 @@ class SalesOrderPdf {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(30),
-        // ------------------------------------------------------------
-        // HEADER: full block on page 1, compact "(contd.)" line + the
-        // column header repeated on every page after that.
-        // ------------------------------------------------------------
         header: (pw.Context context) {
           if (context.pageNumber == 1) {
             return pw.Column(
@@ -92,7 +79,7 @@ class SalesOrderPdf {
                   pw.Center(child: pw.Text('Ph: $phone${email.isNotEmpty ? ' | Email: $email' : ''}', style: bodyStyle)),
                 if (panNo.isNotEmpty) pw.Center(child: pw.Text('VAT/PAN NO: $panNo', style: bodyStyle)),
                 pw.SizedBox(height: 6),
-                pw.Center(child: pw.Text('SALES ORDER', style: titleStyle)),
+                pw.Center(child: pw.Text('PURCHASE ORDER', style: titleStyle)),
                 pw.SizedBox(height: 8),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -105,12 +92,12 @@ class SalesOrderPdf {
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('Customer: $customerName', style: bodyStyle),
-                    pw.Text('miti : ${data['miti'] ?? ''}', style: bodyStyle),
+                    pw.Text('Vendor: $vendorName', style: bodyStyle),
+                    pw.Text('Miti : ${data['miti'] ?? ''}', style: bodyStyle),
                   ],
                 ),
-                if (customerAddress.isNotEmpty) pw.Text('Address: $customerAddress', style: bodyStyle),
-                if (customerPan.isNotEmpty) pw.Text('PAN/VAT No: $customerPan', style: bodyStyle),
+                if (vendorAddress.isNotEmpty) pw.Text('Address: $vendorAddress', style: bodyStyle),
+                if (vendorPan.isNotEmpty) pw.Text('PAN/VAT No: $vendorPan', style: bodyStyle),
                 pw.SizedBox(height: 3),
                 pw.Text('Status: ${data['status'] ?? ''}', style: boldStyle),
                 dashedLine(),
@@ -129,9 +116,6 @@ class SalesOrderPdf {
             ],
           );
         },
-        // ------------------------------------------------------------
-        // FOOTER: "Page x of y", only when there's more than one page.
-        // ------------------------------------------------------------
         footer: (pw.Context context) {
           if (context.pagesCount <= 1) return pw.SizedBox();
           return pw.Container(
@@ -140,10 +124,6 @@ class SalesOrderPdf {
             child: pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: smallStyle),
           );
         },
-        // ------------------------------------------------------------
-        // BODY: item rows first (these are what flow across pages),
-        // then totals / remarks / note at the very end (last page).
-        // ------------------------------------------------------------
         build: (pw.Context context) => [
           ...items.map((item) {
             final String qty = '${item['qty'] ?? ''}';
@@ -188,7 +168,7 @@ class SalesOrderPdf {
             dashedLine(),
           ],
           pw.SizedBox(height: 3),
-          pw.Center(child: pw.Text('This is a computer generated Sales Order', style: pw.TextStyle(fontSize: 8.5, fontStyle: pw.FontStyle.italic))),
+          pw.Center(child: pw.Text('This is a computer generated Purchase Order', style: pw.TextStyle(fontSize: 8.5, fontStyle: pw.FontStyle.italic))),
         ],
       ),
     );

@@ -1,46 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:sas_app/models/sales/sales_order_model.dart';
-import 'package:sas_app/services/sales/sales_order_service.dart';
+import 'package:sas_app/models/purchase/purchase_order_model.dart';
+import 'package:sas_app/services/purchase/purchase_order_service.dart';
 import 'package:sas_app/services/sales/pos_sales_service.dart';
 import 'package:sas_app/core/services/pdf_service.dart';
-import 'package:sas_app/core/services/pdf/templates/sales_order_pdf.dart';
+import 'package:sas_app/core/services/pdf/templates/purchase_order_pdf.dart';
 import 'package:sas_app/shared/widgets/pdf_preview_screen.dart';
 
 // ============================================================================
-// SALES ORDER DETAIL SCREEN
-//
-// Takes just the orderNumber and fetches its own data from
-// GET /sales-order/:orderId via SalesOrderService --- the list screen no
-// longer needs to pass a fully-populated order across the navigation.
-//
-// Shows item-wise terms under each line, and the bill-level terms in the
-// summary card at the bottom. Customer address and PAN/VAT show under the
-// customer name when present (blank values are hidden).
+// PURCHASE ORDER DETAIL SCREEN
+// Takes just the orderNumber and fetches GET /purchase-order/:orderId.
 // ============================================================================
 
-class SalesOrderDetailScreen extends StatefulWidget {
+class PurchaseOrderDetailScreen extends StatefulWidget {
   final String orderNumber;
 
-  const SalesOrderDetailScreen({super.key, required this.orderNumber});
+  const PurchaseOrderDetailScreen({super.key, required this.orderNumber});
 
   @override
-  State<SalesOrderDetailScreen> createState() => _SalesOrderDetailScreenState();
+  State<PurchaseOrderDetailScreen> createState() => _PurchaseOrderDetailScreenState();
 }
 
-class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
-  final _service = SalesOrderService();
+class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
+  final _service = PurchaseOrderService();
 
   static const Color _kInk = Color(0xFF0F172A);
   static const Color _kMuted = Color(0xFF6B7280);
   static const Color _kBorder = Color(0xFFE5E7EB);
-  static const Color _kAccent = Color(0xFF10B981);
+  static const Color _kAccent = Color(0xFF3B82F6); // placeholder Purchase Blue
   static const Color _kApproved = Color(0xFF10B981);
   static const Color _kPending = Color(0xFFF59E0B);
   static const Color _kDeduct = Color(0xFFDC2626);
   static const Color _kDeductOnDark = Color(0xFFFCA5A5);
 
   bool _isLoading = true;
-  SalesOrderDetail? _detail;
+  PurchaseOrderDetail? _detail;
 
   @override
   void initState() {
@@ -50,7 +43,13 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
 
   Future<void> _fetchDetail() async {
     setState(() => _isLoading = true);
-    final detail = await _service.fetchSalesOrderDetail(widget.orderNumber);
+    PurchaseOrderDetail? detail;
+    try {
+      final data = await _service.fetchPurchaseOrderById(widget.orderNumber);
+      if (data.isNotEmpty) detail = PurchaseOrderDetail.fromJson(data);
+    } catch (e) {
+      debugPrint('PO detail error: $e');
+    }
     if (!mounted) return;
     setState(() {
       _detail = detail;
@@ -60,30 +59,23 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
 
   String _formatDate(DateTime d) {
     const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${d.day} ${months[d.month]} ${d.year}';
+    return '${d.day}  ${months[d.month]}  ${d.year}';
   }
 
-  // File name: salesorder_<order no>.pdf, e.g. salesorder_SO-000004.pdf.
-  // Characters that are not allowed in file names (\ / : * ? " < > |)
-  // are replaced with '-'.
+  // e.g. purchaseorder_PO-000004.pdf
   String get _pdfFileName {
     final safeOrder = widget.orderNumber.replaceAll(RegExp(r'[\\/:*?"<>|]'), '-');
-    return 'salesorder_$safeOrder.pdf';
+    return 'purchaseorder_$safeOrder.pdf';
   }
 
-  // Whole numbers without decimals, otherwise [decimals] places.
   String _qtyText(double q, {int decimals = 1}) {
     return q.toStringAsFixed(q.truncateToDouble() == q ? 0 : decimals);
   }
 
-  // "- Rs. 45.00" / "+ Rs. 239.00"
-  String _signedMoney(SalesOrderTerm t) {
+  String _signedMoney(PurchaseOrderTerm t) {
     return '${t.isDeduction ? '-' : '+'} Rs. ${t.amount.toStringAsFixed(2)}';
   }
 
-  // Builds the plain data map SalesOrderPdf.generate expects, from the
-  // already-fetched SalesOrderDetail (no second network call needed ---
-  // unlike SaleDetailsSheet, we already have the full detail in state).
   Future<Map<String, dynamic>> _buildOrderPdfData() async {
     final detail = _detail;
     if (detail == null) {
@@ -95,7 +87,7 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
     try {
       companyInfo = await PosSalesService().fetchActiveCompanyProfile();
     } catch (_) {
-      // Falls back to SalesOrderPdf's own 'GMART' placeholder if this fails.
+      // Falls back to PurchaseOrderPdf's own placeholder if this fails.
     }
 
     final items = List.generate(detail.lineItems.length, (i) {
@@ -106,9 +98,7 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
         'unit': item.unitCode,
         'qty': _qtyText(item.quantity, decimals: 2),
         'rate': item.unitPrice.toStringAsFixed(2),
-        // signed sum of this line's item-wise terms (discount = negative)
         'termAmount': item.termTotal.toStringAsFixed(2),
-        // qty x rate + item terms (tblSODetails.NetAmount)
         'amount': item.lineTotal.toStringAsFixed(2),
       };
     });
@@ -125,9 +115,9 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
       'orderNumber': order.orderNumber,
       'orderDate': _formatDate(order.orderDate),
       'miti': order.miti,
-      'customerName': order.customerName,
-      'customerAddress': order.customerAddress,
-      'customerPan': order.customerPan,
+      'vendorName': order.vendorName,
+      'vendorAddress': order.vendorAddress,
+      'vendorPan': order.vendorPan,
       'status': order.isApproved ? 'Approved' : 'Pending',
       'basicAmount': detail.basicAmount.toStringAsFixed(2),
       'netAmount': order.total.toStringAsFixed(2),
@@ -157,9 +147,9 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
             builder: (_) => PdfPreviewScreen(
               transactionData: const {},
               invoiceType: '',
-              title: 'Sales Order Preview',
+              title: 'Purchase Order Preview',
               fileName: _pdfFileName,
-              pdfBuilder: (format) => SalesOrderPdf.generate(orderData),
+              pdfBuilder: (format) => PurchaseOrderPdf.generate(orderData),
             ),
           ),
         );
@@ -190,7 +180,7 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
 
     try {
       final orderData = await _buildOrderPdfData();
-      final bytes = await SalesOrderPdf.generate(orderData);
+      final bytes = await PurchaseOrderPdf.generate(orderData);
       await PdfService.sharePdfBytes(bytes, fileName: _pdfFileName);
     } catch (e) {
       if (context.mounted) {
@@ -205,7 +195,6 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
     }
   }
 
-  // One label/value row inside the dark summary card.
   Widget _summaryRow(String label, String value, {Color valueColor = Colors.white}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -222,8 +211,8 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
     );
   }
 
-  // One muted icon + text line under the customer name (address / PAN).
-  Widget _customerInfoLine(IconData icon, String text) {
+  // One muted icon + text line under the vendor name (address / PAN).
+  Widget _vendorInfoLine(IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Row(
@@ -285,7 +274,7 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  order!.customerName,
+                                  order!.vendorName,
                                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _kInk),
                                 ),
                               ),
@@ -302,11 +291,11 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
                               ),
                             ],
                           ),
-                          // Customer details --- blank values are not shown.
-                          if (order.customerAddress.isNotEmpty)
-                            _customerInfoLine(Icons.location_on_outlined, order.customerAddress),
-                          if (order.customerPan.isNotEmpty)
-                            _customerInfoLine(Icons.badge_outlined, 'PAN/VAT: ${order.customerPan}'),
+                          // Vendor details --- blank values are not shown.
+                          if (order.vendorAddress.isNotEmpty)
+                            _vendorInfoLine(Icons.location_on_outlined, order.vendorAddress),
+                          if (order.vendorPan.isNotEmpty)
+                            _vendorInfoLine(Icons.badge_outlined, 'PAN/VAT: ${order.vendorPan}'),
                           const SizedBox(height: 10),
                           Row(
                             children: [
@@ -328,12 +317,11 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    // --- Line items header ---
                     const Padding(
                       padding: EdgeInsets.only(left: 4, bottom: 10),
                       child: Text('Items', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.4)),
                     ),
-                    // --- Line items list (with item-wise terms) ---
+                    // --- Line items (with item-wise terms) ---
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -393,7 +381,6 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
                                     ),
                                   ],
                                 ),
-                                // Item-wise terms (e.g. "PDISCOUNT (5%)   - Rs. 45.00")
                                 if (item.itemTerms.isNotEmpty) ...[
                                   const SizedBox(height: 8),
                                   Padding(
@@ -431,7 +418,7 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    // --- Total summary (basic amount, bill terms, order total) ---
+                    // --- Total summary ---
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
@@ -469,7 +456,6 @@ class _SalesOrderDetailScreenState extends State<SalesOrderDetailScreen> {
                     ),
                   ],
                 ),
-      // --- Bottom action bar (Preview + Export PDF & Share) ---
       bottomNavigationBar: _detail == null
           ? null
           : Container(

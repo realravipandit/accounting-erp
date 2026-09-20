@@ -16,6 +16,8 @@ import 'package:sas_app/features/sales/sales_entry_pos_screen.dart'; // 👈 NEW
 import 'package:sas_app/features/sales/sales_order_list_screen.dart';
 import 'package:sas_app/features/purchase/purchase_entry_screen.dart';
 import 'package:sas_app/features/sales/sales_order_entry_screen.dart';
+import 'package:sas_app/features/purchase/purchase_order_entry_screen.dart';
+import 'package:sas_app/features/purchase/purchase_order_list_screen.dart';
 import 'package:sas_app/features/ledger/ledger_report_screen.dart';
 
 class CustomDrawer extends StatelessWidget {
@@ -143,6 +145,7 @@ class CustomDrawer extends StatelessWidget {
                     iconBgColor: Colors.orange.shade50,
                     iconColor: Colors.orange.shade700,
                     items: [
+                      {'title': 'Purchase Order Entry', 'page': const PurchaseOrderEntryScreen()},
                       {'title': 'Purchase Invoice', 'page': const PurchaseScreen()},
                       {'title': 'Purchase Entry', 'page': const PurchaseEntryScreen()},
                       {'title': 'Vendor List', 'page': const PayableScreen()},
@@ -176,6 +179,7 @@ class CustomDrawer extends StatelessWidget {
                     iconColor: Colors.blue.shade700,
                     items: [
                       {'title': 'Sales Order Report', 'page': const SalesOrderListScreen()},
+                      {'title': 'Purchase Order Report', 'page': const PurchaseOrderListScreen()},
                       {'title': 'Receivables', 'page': const ReceivableScreen()},
                       {'title': 'Payables', 'page': const PayableScreen()},
                       {'title': 'Ledger Report', 'page': const LedgerReportPage()},
