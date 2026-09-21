@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:nepali_date_picker/nepali_date_picker.dart';
+import 'package:sas_app/core/services/toast_service.dart';
 import 'package:sas_app/services/sales/sales_service.dart';
 import 'package:sas_app/features/sales/sales_entry_screen.dart'; // For ItemSearchScreen reuse
 
@@ -90,7 +91,10 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
           });
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      // Previously swallowed silently; now tell the user the terms did not load.
+      _showSnack('Failed to load terms: $e', isError: true);
+    }
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -107,6 +111,7 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
         child: child!,
       ),
     );
+
     if (picked != null && mounted) {
       setState(() {
         _selectedNepaliDate = picked;
@@ -323,7 +328,6 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
         ),
       ),
     );
-
     if (selectedItem != null && mounted) {
       _showAddBillingItemDialog(selectedItem);
     }
@@ -782,6 +786,7 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
     try {
       // You will need to add `submitSalesOrder` to your SalesService
       final result = await _salesService.submitSalesOrder(payload);
+
       if (!mounted) return;
       setState(() => _isSaving = false);
 
@@ -890,14 +895,15 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
   }
 
   // ── UI Helpers ───────────────────────────────────────────────────────────
+
+  // All screen notifications go through ToastService (was a SnackBar).
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? Colors.red : Colors.green,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ));
+    if (isError) {
+      ToastService.showError(context, msg);
+    } else {
+      ToastService.showSuccess(context, msg);
+    }
   }
 
   InputDecoration _modernInputDecoration({String? hint, String? prefix, String? suffix}) {
@@ -1203,7 +1209,6 @@ class _SalesOrderEntryScreenState extends State<SalesOrderEntryScreen> {
     final double qty = double.tryParse(item['qty'].toString()) ?? 0;
     final double price = double.tryParse(item['price'].toString()) ?? 0;
     final double total = double.tryParse(item['totalAmount'].toString()) ?? 0;
-
     final double gross = qty * price;
     final double disc = (gross - total).clamp(0.0, double.infinity);
     final double discPct = gross > 0 ? (disc / gross) * 100 : 0;

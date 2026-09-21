@@ -1,5 +1,4 @@
 import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -21,18 +20,19 @@ import 'package:sas_app/features/banking/cash_bank_entry_screen.dart';
 import 'package:sas_app/models/common/record_filter.dart';
 import 'package:sas_app/shared/widgets/records/record_date_filter.dart';
 import 'package:sas_app/utils/date_period_utils.dart';
-
 // 👉 new combined tabbed screens backing the Transactions / Parties nav tabs
 import 'package:sas_app/features/navigation/transactions_screen.dart';
 import 'package:sas_app/features/navigation/parties_screen.dart';
-
 // 👉 nav-chrome widgets extracted out of this file --- not dashboard-specific
 import 'package:sas_app/shared/widgets/app_bottom_nav.dart';
 import 'package:sas_app/shared/widgets/fade_indexed_stack.dart';
+// 👉 offers biometric login right after the company is chosen
+import 'package:sas_app/services/auth/biometric_enrollment.dart';
 
 // ============================================================================
 // HOME PAGE
 // ============================================================================
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -55,8 +55,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   // TODO: wire to real counts --- unpaid invoices (Transactions) and low-stock
   // items (Inventory). Deferred per the nav redesign spec; badges stay
   // hidden (count 0) until this is wired up.
-  int _transactionsBadgeCount = 0;
-  int _inventoryBadgeCount = 0;
+  final int _transactionsBadgeCount = 0;
+  final int _inventoryBadgeCount = 0;
 
   // Bottom-nav geometry, shared between the bar, the floating pill, and the
   // quick-add speed-dial menu so they stay aligned.
@@ -68,14 +68,22 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _addMenuController = AnimationController(vsync: this, duration: const Duration(milliseconds: 550));
+
     _pages = [
       DashboardPage(onFilterSheetOpenChanged: _setOverviewFilterOpen),
       const TransactionsScreen(),
       const PartiesScreen(),
       const InventoryScreen(),
     ];
+
     const FlutterSecureStorage().read(key: 'selected_company_name').then((val) {
       if (val != null && mounted) setState(() => _companyName = val);
+    });
+
+    // Offer biometric login right after the company is chosen (only if the
+    // user just signed in with a password and hasn't enabled it yet).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) BiometricEnrollment.promptIfPending(context);
     });
   }
 
@@ -295,6 +303,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ),
           ),
         ),
+
         // Floating "New transaction" pill --- separate from the bar, anchored
         // to the right edge, floating just above it. Dashboard-only.
         if (_currentIndex == 0 && !_isDrawerOpen)
@@ -303,6 +312,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             bottom: pillBottom,
             child: TransactionPill(isSelected: _isAddMenuOpen, onTap: _toggleAddMenu),
           ),
+
         _buildQuickAddMenu(),
       ],
     );
@@ -312,8 +322,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 // ============================================================================
 // DASHBOARD PAGE
 // ============================================================================
+
 class DashboardPage extends StatefulWidget {
   final ValueChanged<bool>? onFilterSheetOpenChanged;
+
   const DashboardPage({super.key, this.onFilterSheetOpenChanged});
 
   @override
@@ -374,8 +386,8 @@ class _DashboardPageState extends State<DashboardPage> {
       const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       final start = _customRange!.start;
       final end = _customRange!.end;
-      final startStr = '${start.day}  ${months[start.month]}';
-      final endStr = '${end.day}  ${months[end.month]}';
+      final startStr = '${start.day} ${months[start.month]}';
+      final endStr = '${end.day} ${months[end.month]}';
       if (start.year == end.year && start.month == end.month && start.day == end.day) {
         return startStr;
       }
@@ -520,56 +532,56 @@ class _DashboardPageState extends State<DashboardPage> {
         child: _isLoading
             ? _buildSkeletonLoader()
             : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Overview', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-              InkWell(
-                onTap: _showPeriodFilterSheet,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _kDashAccentBg,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: _kDashAccent.withValues(alpha: 0.25)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.calendar_today_rounded, size: 12, color: _kDashAccent),
-                      const SizedBox(width: 6),
-                      Text(
-                        _getDisplayLabel(),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kDashAccent),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Overview', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                    InkWell(
+                      onTap: _showPeriodFilterSheet,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _kDashAccentBg,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _kDashAccent.withValues(alpha: 0.25)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_today_rounded, size: 12, color: _kDashAccent),
+                            const SizedBox(width: 6),
+                            Text(
+                              _getDisplayLabel(),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kDashAccent),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: _kDashAccent),
+                          ],
+                        ),
                       ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: _kDashAccent),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(children: [
-            _gridItem("Sales", Icons.trending_up, const Color(0xFF10B981), _salesAmt, _salesQty, null, const SaleScreen()),
-            const SizedBox(width: 14),
-            _gridItem("Purchases", Icons.shopping_bag, const Color(0xFF3B82F6), _purchAmt, _purchQty, null, const PurchaseScreen()),
-          ]),
-          const SizedBox(height: 14),
-          _listItem("Outstanding Balance", Icons.account_balance_wallet, const Color(0xFFF59E0B), const OutstandingScreen(), "Customer: Rs. ", _custOut, "Vendor: Rs. ", _vendOut),
-          const SizedBox(height: 14),
-          Row(children: [
-            _gridItem("Payables", Icons.arrow_upward, const Color(0xFFF43F5E), _payables, null, "To pay", const PayableScreen()),
-            const SizedBox(width: 14),
-            _gridItem("Receivables", Icons.arrow_downward, const Color(0xFF0EA5E9), _receivables, null, "To receive", const ReceivableScreen()),
-          ]),
-          const SizedBox(height: 14),
-          _listItem("Inventory Status", Icons.inventory_2, const Color(0xFF6366F1), const InventoryScreen(), "Items in Stock: ", _stockQty.toDouble(), "Total Value: Rs. ", _stockVal),
-          const SizedBox(height: 14),
-          _listItem('Ageing Report', Icons.access_time, const Color(0xFFA855F7), const AgeingScreen(), "Customer Ageing", 0, "Vendor Ageing", 0, isStatic: true),
-        ]),
+                const SizedBox(height: 16),
+                Row(children: [
+                  _gridItem("Sales", Icons.trending_up, const Color(0xFF10B981), _salesAmt, _salesQty, null, const SaleScreen()),
+                  const SizedBox(width: 14),
+                  _gridItem("Purchases", Icons.shopping_bag, const Color(0xFF3B82F6), _purchAmt, _purchQty, null, const PurchaseScreen()),
+                ]),
+                const SizedBox(height: 14),
+                _listItem("Outstanding Balance", Icons.account_balance_wallet, const Color(0xFFF59E0B), const OutstandingScreen(), "Customer: Rs. ", _custOut, "Vendor: Rs. ", _vendOut),
+                const SizedBox(height: 14),
+                Row(children: [
+                  _gridItem("Payables", Icons.arrow_upward, const Color(0xFFF43F5E), _payables, null, "To pay", const PayableScreen()),
+                  const SizedBox(width: 14),
+                  _gridItem("Receivables", Icons.arrow_downward, const Color(0xFF0EA5E9), _receivables, null, "To receive", const ReceivableScreen()),
+                ]),
+                const SizedBox(height: 14),
+                _listItem("Inventory Status", Icons.inventory_2, const Color(0xFF6366F1), const InventoryScreen(), "Items in Stock: ", _stockQty.toDouble(), "Total Value: Rs. ", _stockVal),
+                const SizedBox(height: 14),
+                _listItem('Ageing Report', Icons.access_time, const Color(0xFFA855F7), const AgeingScreen(), "Customer Ageing", 0, "Vendor Ageing", 0, isStatic: true),
+              ]),
       ),
     );
   }
@@ -578,6 +590,7 @@ class _DashboardPageState extends State<DashboardPage> {
 // ============================================================================
 // QUICK-ADD SPEED-DIAL DATA + BUTTON (unchanged)
 // ============================================================================
+
 class _QuickAddOption {
   final String label;
   final IconData icon;

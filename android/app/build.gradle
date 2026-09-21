@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace 'com.example.sas_akount_login'
+    namespace "com.smsoftech.sas_app"
     compileSdkVersion flutter.compileSdkVersion
     ndkVersion flutter.ndkVersion
 

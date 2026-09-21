@@ -1,5 +1,4 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:sas_app/core/services/toast_service.dart';
 import 'package:sas_app/features/banking/cash_bank_entry_screen.dart';
 import 'package:sas_app/features/ledger/stock_ledger_report_screen.dart';
 import 'package:sas_app/features/sales/sale_screen.dart';
@@ -19,6 +18,7 @@ import 'package:sas_app/features/sales/sales_order_entry_screen.dart';
 import 'package:sas_app/features/purchase/purchase_order_entry_screen.dart';
 import 'package:sas_app/features/purchase/purchase_order_list_screen.dart';
 import 'package:sas_app/features/ledger/ledger_report_screen.dart';
+import 'package:sas_app/features/auth/biometric_settings_screen.dart';
 
 class CustomDrawer extends StatelessWidget {
   const CustomDrawer({super.key});
@@ -53,6 +53,7 @@ class CustomDrawer extends StatelessWidget {
                 ],
               ),
             ),
+
             // --- SCROLLABLE CONTENT ---
             Expanded(
               child: ListView(
@@ -102,6 +103,7 @@ class CustomDrawer extends StatelessWidget {
                       ),
                     ),
                   ),
+
                   // --- SECTION 1: CORE MODULES ---
                   const Padding(
                     padding: EdgeInsets.only(left: 8, bottom: 8),
@@ -110,6 +112,7 @@ class CustomDrawer extends StatelessWidget {
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.1),
                     ),
                   ),
+
                   // Chart of Account (Ledger Master & Item Master)
                   buildStyledExpansionTile(
                     context,
@@ -123,6 +126,7 @@ class CustomDrawer extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
+
                   buildStyledExpansionTile(
                     context,
                     title: 'Sale Module',
@@ -138,6 +142,7 @@ class CustomDrawer extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
+
                   buildStyledExpansionTile(
                     context,
                     title: 'Purchase Module',
@@ -152,6 +157,7 @@ class CustomDrawer extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
+
                   buildStyledExpansionTile(
                     context,
                     title: 'Cash/Bank',
@@ -162,7 +168,9 @@ class CustomDrawer extends StatelessWidget {
                       {'title': 'Cash/Bank Ac', 'page': const CashBankEntryScreen()},
                     ],
                   ),
+
                   const SizedBox(height: 20),
+
                   // --- SECTION 2: REPORTS & ANALYTICS ---
                   const Padding(
                     padding: EdgeInsets.only(left: 8, bottom: 8),
@@ -171,6 +179,7 @@ class CustomDrawer extends StatelessWidget {
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.1),
                     ),
                   ),
+
                   buildStyledExpansionTile(
                     context,
                     title: 'Reports',
@@ -188,70 +197,24 @@ class CustomDrawer extends StatelessWidget {
                       {'title': 'Customer Ageing', 'page': const AgeingScreen()},
                     ],
                   ),
+
                   const SizedBox(height: 20),
+
                   // --- SECTION 3: SYSTEM SETTINGS ---
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200, width: 1),
-                    ),
-                    child: Material(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      child: ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.settings_outlined, color: Colors.black87),
-                        ),
-                        title: const Text('Settings', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-                        trailing: const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
-                        onTap: () {},
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // --- DEV: TEST TOASTS ROW (remove before shipping) ---
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200, width: 1),
-                    ),
-                    child: Material(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Test Toasts',
-                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87),
-                            ),
-                            Row(
-                              children: [
-                                _toastTestIcon(context, Icons.check_circle_outline, Colors.green,
-                                    () => ToastService.showSuccess(context, 'Success toast')),
-                                _toastTestIcon(context, Icons.error_outline, Colors.red,
-                                    () => ToastService.showError(context, 'Error toast')),
-                                _toastTestIcon(context, Icons.warning_amber_rounded, Colors.orange,
-                                    () => ToastService.showWarning(context, 'Warning toast')),
-                                _toastTestIcon(context, Icons.info_outline, Colors.blue,
-                                    () => ToastService.showInfo(context, 'Info toast')),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  buildStyledExpansionTile(
+                    context,
+                    title: 'Settings',
+                    icon: Icons.settings_outlined,
+                    iconBgColor: Colors.grey.shade100,
+                    iconColor: Colors.black87,
+                    items: [
+                      {'title': 'Biometric login', 'page': const BiometricSettingsScreen()},
+                    ],
                   ),
                 ],
               ),
             ),
+
             // --- LOGOUT BUTTON AT THE BOTTOM ---
             SafeArea(
               top: false,
@@ -388,17 +351,6 @@ class CustomDrawer extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-
-  // --- DEV: small icon button for the toast test row ---
-  Widget _toastTestIcon(BuildContext context, IconData icon, Color color, VoidCallback onTap) {
-    return IconButton(
-      icon: Icon(icon, color: color, size: 20),
-      onPressed: onTap,
-      splashRadius: 18,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
     );
   }
 }

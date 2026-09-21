@@ -1,18 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
 import 'package:sas_app/services/auth/auth_service.dart';
+import 'package:sas_app/services/auth/biometric_service.dart';
+import 'package:sas_app/services/auth/biometric_enrollment.dart';
 import 'package:sas_app/core/database/db_helper.dart';
 import 'package:sas_app/features/company/company_selection_screen.dart';
 import 'package:sas_app/core/services/toast_service.dart';
 import 'package:sas_app/core/config/config.dart';
-
 
 final _storage = const FlutterSecureStorage();
 
@@ -39,11 +38,16 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
 
   final DBHelper _dbHelper = DBHelper();
   final AuthService _apiService = AuthService();
+  final BiometricService _bio = BiometricService();
 
   bool _obscurePassword = true;
   bool _isLoading = false;
-  bool _rememberMe = false;
   bool _isAkountMaster = false;
+
+  // --- Biometric / saved accounts state ---
+  bool _bioAvailable = false;
+  List<SavedBiometricAccount> _savedAccounts = [];
+  String? _busyAccountId; // account tile currently signing in
 
   // --- Server address state ---
   _ConnState _serverState = _ConnState.idle;
@@ -57,6 +61,9 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+
+  // Auto-prompt fires once per app launch, not again after logging out.
+  static bool _autoPromptedThisLaunch = false;
 
   // --- Theme Colors: Sunrise Vibe ---
   final Color _cardBg = const Color(0xFFF9F5EC);
@@ -72,6 +79,7 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
   void initState() {
     super.initState();
     _loadSavedData();
+    _loadBiometricState();
 
     _animationController = AnimationController(
       vsync: this,
@@ -103,18 +111,11 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
   }
 
   Future<void> _loadSavedData() async {
-    final savedRememberMe = await _storage.read(key: 'remember_me');
-    if (savedRememberMe == 'true') {
-      final savedUsername = await _storage.read(key: 'saved_username');
-      final savedPassword = await _storage.read(key: 'saved_password');
-      if (mounted) {
-        setState(() {
-          _rememberMe = true;
-          _usernameController.text = savedUsername ?? '';
-          _passwordController.text = savedPassword ?? '';
-        });
-      }
-    }
+    // "Remember me" was replaced by biometric saved accounts. Clear the old
+    // saved username/password so an unprotected copy is not left on the device.
+    await _storage.delete(key: 'saved_username');
+    await _storage.delete(key: 'saved_password');
+    await _storage.delete(key: 'remember_me');
 
     final savedDbMode = await _storage.read(key: 'saved_central_db');
     if (savedDbMode != null && mounted) {
@@ -141,6 +142,58 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     }
   }
 
+  // ── Biometric state ──────────────────────────────────────────────────────
+
+  Future<void> _loadBiometricState() async {
+    final available = await _bio.isAvailable();
+    final accounts = available ? await _bio.getAccounts() : <SavedBiometricAccount>[];
+    if (!mounted) return;
+    setState(() {
+      _bioAvailable = available;
+      _savedAccounts = accounts;
+    });
+    _maybeAutoPrompt();
+  }
+
+  /// If "Auto-prompt on app open" is on: sign in with the chosen account, the
+  /// only saved account, or show the account list when several are saved and
+  /// none is chosen.
+  Future<void> _maybeAutoPrompt() async {
+    if (_autoPromptedThisLaunch) return;
+    _autoPromptedThisLaunch = true;
+
+    if (!_bioAvailable || _savedAccounts.isEmpty) return;
+    if (!await _bio.getAutoPrompt()) return;
+
+    SavedBiometricAccount? target;
+    if (_savedAccounts.length == 1) {
+      target = _savedAccounts.first;
+    } else {
+      final chosenId = await _bio.getAutoPromptAccountId();
+      for (final a in _savedAccounts) {
+        if (a.id == chosenId) target = a;
+      }
+    }
+
+    // Let the login screen finish its entrance animation first.
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted || _isLoading) return;
+
+    if (target != null) {
+      _signInWithSavedAccount(target);
+    } else {
+      _showBiometricSheet();
+    }
+  }
+
+  Future<void> _refreshAccounts() async {
+    final accounts = _bioAvailable ? await _bio.getAccounts() : <SavedBiometricAccount>[];
+    if (!mounted) return;
+    setState(() {
+      _savedAccounts = accounts;
+    });
+  }
+
   String _normalizeServerAddress(String input) {
     var addr = input.trim();
     if (!addr.startsWith('http://') && !addr.startsWith('https://')) {
@@ -152,19 +205,18 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
 
   Future<void> _checkServer(String rawInput, {bool silent = false}) async {
     final target = rawInput.trim().isEmpty ? _kDefaultServerAddress : rawInput.trim();
-
     if (!silent) {
       setState(() => _serverState = _ConnState.checking);
     }
 
     final baseUrl = _normalizeServerAddress(target);
-
     try {
       final response = await http
           .get(Uri.parse('$baseUrl/api/health'))
           .timeout(const Duration(seconds: 3));
 
       if (!mounted) return;
+
       bool ok = false;
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
@@ -201,15 +253,68 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     _checkServer(_lastKnownGoodServer!);
   }
 
-  void _login() async {
-    FocusScope.of(context).unfocus();
+  // ── Sign in ──────────────────────────────────────────────────────────────
+
+  /// Shared sign-in call used by both the manual form and saved accounts.
+  /// Returns true on success. On failure it shows a toast and clears the
+  /// loading state. On success the loading state is left on until navigation.
+  Future<bool> _signIn({
+    required String username,
+    required String password,
+    required String baseUrl,
+    required bool akountMaster,
+    String invalidMessage = 'Invalid username or password.',
+  }) async {
     setState(() => _isLoading = true);
+
+    await _storage.write(key: _kActiveServerKey, value: baseUrl);
+    await _storage.write(key: 'saved_central_db', value: akountMaster.toString());
+
+    final targetDb = akountMaster ? 'SmAkountMaster' : 'SASBillingMaster';
+
+    try {
+      final isAuthenticated = await _apiService.login(username, password, targetDb);
+      if (!mounted) return false;
+
+      if (isAuthenticated) {
+        await _storage.write(key: _kLastGoodServerKey, value: baseUrl);
+        await _storage.write(key: 'current_username', value: username);
+        return true;
+      }
+
+      setState(() => _isLoading = false);
+      ToastService.showError(context, invalidMessage);
+      return false;
+    } catch (e) {
+      if (!mounted) return false;
+      setState(() => _isLoading = false);
+      ToastService.showError(context, 'Connection failed: Unable to reach the server.');
+      debugPrint('Backend Connection Error: $e');
+      return false;
+    }
+  }
+
+  void _finishLogin() {
+    ToastService.showSuccess(context, 'Login successful!');
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => const CompanySelectionScreen(),
+        transitionsBuilder: (_, animation, __, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 350),
+      ),
+    );
+  }
+
+  /// Manual sign in (username + password form).
+  Future<void> _login() async {
+    FocusScope.of(context).unfocus();
 
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
 
     if (username.isEmpty) {
-      setState(() => _isLoading = false);
       ToastService.showError(context, 'Please enter your username');
       return;
     }
@@ -219,48 +324,122 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     final serverToConnect = rawServer.isEmpty ? _kDefaultServerAddress : rawServer;
     final baseUrl = _normalizeServerAddress(serverToConnect);
 
-    await _storage.write(key: _kActiveServerKey, value: baseUrl);
-    await _storage.write(key: 'saved_central_db', value: _isAkountMaster.toString());
+    final ok = await _signIn(
+      username: username,
+      password: password,
+      baseUrl: baseUrl,
+      akountMaster: _isAkountMaster,
+    );
+    if (!ok || !mounted) return;
 
-    final targetDb = _isAkountMaster ? 'SmAkountMaster' : 'SASBillingMaster';
+    await _prepareBiometricEnrollment(
+      username: username,
+      password: password,
+      baseUrl: baseUrl,
+      akountMaster: _isAkountMaster,
+    );
+    if (!mounted) return;
+
+    _finishLogin();
+  }
+
+  /// Sign in with a saved account: biometric prompt first, then the stored
+  /// password goes through the normal login call.
+  Future<void> _signInWithSavedAccount(SavedBiometricAccount account) async {
+    if (_isLoading) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _busyAccountId = account.id);
+
+    final auth = await _bio.authenticate(reason: 'Sign in as ${account.username}');
+    if (!mounted) return;
+
+    if (!auth.success) {
+      setState(() => _busyAccountId = null);
+      if (!auth.canceled) {
+        ToastService.showError(context, auth.message ?? 'Biometric authentication failed.');
+      }
+      return;
+    }
+
+    final password = await _bio.readPassword(account.id);
+    if (!mounted) return;
+
+    if (password == null || password.isEmpty) {
+      await _bio.removeAccount(account.id);
+      if (!mounted) return;
+      setState(() => _busyAccountId = null);
+      await _refreshAccounts();
+      if (!mounted) return;
+      ToastService.showError(context, 'Saved credentials not found. Please sign in with your password.');
+      return;
+    }
+
+    // Mirror the account's database, server and username into the manual form.
+    setState(() {
+      _isAkountMaster = account.isAkount;
+      _serverController.text = account.serverAddress;
+      _usernameController.text = account.username;
+    });
+
+    final ok = await _signIn(
+      username: account.username,
+      password: password,
+      baseUrl: account.serverAddress,
+      akountMaster: account.isAkount,
+      invalidMessage: 'Sign in failed. If your password changed, use another account to update it.',
+    );
+    if (!mounted) return;
+    setState(() => _busyAccountId = null);
+
+    if (!ok) return;
+    await _bio.markUsed(account.id);
+    if (!mounted) return;
+    _finishLogin();
+  }
+
+  /// After a successful manual login: if this account already has biometric
+  /// login, silently refresh its stored password. Otherwise stage it so the
+  /// dashboard can offer to enable biometric login once the company is chosen.
+  Future<void> _prepareBiometricEnrollment({
+    required String username,
+    required String password,
+    required String baseUrl,
+    required bool akountMaster,
+  }) async {
+    if (!_bioAvailable) return;
+
+    final targetDb = akountMaster ? 'SmAkountMaster' : 'SASBillingMaster';
+    final id = BiometricService.accountId(
+      username: username,
+      centralDatabase: targetDb,
+      serverAddress: baseUrl,
+    );
 
     try {
-      final isAuthenticated = await _apiService.login(username, password, targetDb);
-
-      if (!mounted) return;
-
-      if (isAuthenticated) {
-        if (_rememberMe) {
-          await _storage.write(key: 'saved_username', value: username);
-          await _storage.write(key: 'saved_password', value: password);
-          await _storage.write(key: 'remember_me', value: 'true');
-        } else {
-          await _storage.delete(key: 'saved_username');
-          await _storage.delete(key: 'saved_password');
-          await _storage.write(key: 'remember_me', value: 'false');
-        }
-        await _storage.write(key: _kLastGoodServerKey, value: baseUrl);
-
-        ToastService.showSuccess(context, 'Login successful!');
-
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (_, __, ___) => const CompanySelectionScreen(),
-            transitionsBuilder: (_, animation, __, child) =>
-                FadeTransition(opacity: animation, child: child),
-            transitionDuration: const Duration(milliseconds: 350),
-          ),
+      if (await _bio.hasAccount(id)) {
+        BiometricEnrollment.clear();
+        await _bio.saveAccount(
+          username: username,
+          password: password,
+          centralDatabase: targetDb,
+          serverAddress: baseUrl,
         );
-      } else {
-        setState(() => _isLoading = false);
-        ToastService.showError(context, 'Invalid username or password.');
+        return;
       }
+
+      if (!await _bio.getOfferEnabled()) {
+        BiometricEnrollment.clear();
+        return;
+      }
+
+      BiometricEnrollment.stage(
+        username: username,
+        password: password,
+        centralDatabase: targetDb,
+        serverAddress: baseUrl,
+      );
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      ToastService.showError(context, 'Connection failed: Unable to reach the server.');
-      debugPrint('Backend Connection Error: $e');
+      debugPrint('Biometric enrollment staging error: $e');
     }
   }
 
@@ -370,57 +549,30 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                 ),
                               ),
                               const SizedBox(height: 28),
-                              _buildServerInput(),
-                              if (_showServerSuggestion) _buildServerSuggestion(),
-                              const SizedBox(height: 12),
-                              _buildInput(
-                                controller: _usernameController,
-                                focusNode: _usernameFocus,
-                                label: 'Username',
-                                icon: Icons.person_outline_rounded,
-                                obscure: false,
-                              ),
-                              const SizedBox(height: 12),
-                              _buildInput(
-                                controller: _passwordController,
-                                focusNode: _passwordFocus,
-                                label: 'Password',
-                                icon: Icons.lock_outline_rounded,
-                                obscure: _obscurePassword,
-                                isPassword: true,
-                              ),
-                              const SizedBox(height: 18),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => setState(() => _rememberMe = !_rememberMe),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 18,
-                                          height: 18,
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(5),
-                                            border: Border.all(
-                                              color: _rememberMe ? _accentColor : _textMuted.withValues(alpha: 0.5),
-                                              width: 1.5,
-                                            ),
-                                            color: _rememberMe ? _accentColor : Colors.transparent,
-                                          ),
-                                          child: _rememberMe
-                                              ? const Icon(Icons.check, size: 13, color: Colors.white)
-                                              : null,
-                                        ),
-                                        const SizedBox(width: 9),
-                                        Text(
-                                          'Remember me',
-                                          style: TextStyle(color: _textMuted, fontSize: 13.5),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  GestureDetector(
+                              ...[
+                                _buildServerInput(),
+                                if (_showServerSuggestion) _buildServerSuggestion(),
+                                const SizedBox(height: 12),
+                                _buildInput(
+                                  controller: _usernameController,
+                                  focusNode: _usernameFocus,
+                                  label: 'Username',
+                                  icon: Icons.person_outline_rounded,
+                                  obscure: false,
+                                ),
+                                const SizedBox(height: 12),
+                                _buildInput(
+                                  controller: _passwordController,
+                                  focusNode: _passwordFocus,
+                                  label: 'Password',
+                                  icon: Icons.lock_outline_rounded,
+                                  obscure: _obscurePassword,
+                                  isPassword: true,
+                                ),
+                                const SizedBox(height: 18),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: GestureDetector(
                                     onTap: () {},
                                     child: Text(
                                       'Forgot password?',
@@ -431,40 +583,54 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 30),
-                              SizedBox(
-                                height: 52,
-                                child: ElevatedButton(
-                                  onPressed: _isLoading ? null : _login,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: _btnBg,
-                                    foregroundColor: _textMain,
-                                    disabledBackgroundColor: _btnBg.withValues(alpha: 0.5),
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(50),
+                                ),
+                                const SizedBox(height: 30),
+                                SizedBox(
+                                  height: 52,
+                                  child: ElevatedButton(
+                                    onPressed: _isLoading ? null : _login,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _btnBg,
+                                      foregroundColor: _textMain,
+                                      disabledBackgroundColor: _btnBg.withValues(alpha: 0.5),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(50),
+                                      ),
+                                    ),
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            width: 22,
+                                            height: 22,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                              color: Colors.black87,
+                                            ),
+                                          )
+                                        : const Text(
+                                            'Sign In',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                                if (_bioAvailable && _savedAccounts.isNotEmpty) ...[
+                                  const SizedBox(height: 14),
+                                  Center(
+                                    child: TextButton.icon(
+                                      onPressed: _isLoading ? null : _showBiometricSheet,
+                                      style: TextButton.styleFrom(foregroundColor: _textMain),
+                                      icon: const Icon(Icons.fingerprint_rounded, size: 22),
+                                      label: const Text(
+                                        'Login with biometric',
+                                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                      ),
                                     ),
                                   ),
-                                  child: _isLoading
-                                      ? const SizedBox(
-                                          width: 22,
-                                          height: 22,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2.5,
-                                            color: Colors.black87,
-                                          ),
-                                        )
-                                      : const Text(
-                                          'Sign In',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                ),
-                              ),
+                                ],
+                              ],
                             ],
                           ),
                         ),
@@ -491,7 +657,7 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '© 2026 S.M. Softech Solutions Pvt. Ltd.\nAll rights reserved.',
+                          '\u00A9 2026 S.M. Softech Solutions Pvt. Ltd.\nAll rights reserved.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: _textMain.withValues(alpha: 0.5),
@@ -512,10 +678,206 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     );
   }
 
+  // ── Biometric bottom sheet ───────────────────────────────────────────────
+
+  Future<void> _showBiometricSheet() async {
+    if (_isLoading || _savedAccounts.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    HapticFeedback.selectionClick();
+
+    final picked = await showModalBottomSheet<SavedBiometricAccount>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 420),
+        reverseDuration: Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      ),
+      builder: (ctx) => _buildBiometricSheet(ctx),
+    );
+
+    if (picked == null || !mounted) return;
+
+    // Let the sheet finish closing before the system fingerprint prompt appears.
+    await Future.delayed(const Duration(milliseconds: 240));
+    if (!mounted) return;
+    _signInWithSavedAccount(picked);
+  }
+
+  Widget _buildBiometricSheet(BuildContext ctx) {
+    final bottomInset = MediaQuery.of(ctx).padding.bottom;
+    final maxListHeight = MediaQuery.of(ctx).size.height * 0.45;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 30,
+            offset: const Offset(0, -6),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.fromLTRB(20, 10, 20, 16 + bottomInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: _textMuted.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: _accentColor.withValues(alpha: 0.35),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.fingerprint_rounded, color: _textMain, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Login with biometric',
+                      style: TextStyle(
+                        color: _textMain,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Choose an account to continue',
+                      style: TextStyle(color: _textMuted, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxListHeight),
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: _savedAccounts.length,
+              itemBuilder: (_, i) {
+                final account = _savedAccounts[i];
+                return TweenAnimationBuilder<double>(
+                  key: ValueKey(account.id),
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: Duration(milliseconds: 320 + i * 70),
+                  curve: Curves.easeOutCubic,
+                  builder: (_, v, child) => Opacity(
+                    opacity: v,
+                    child: Transform.translate(
+                      offset: Offset(0, 14 * (1 - v)),
+                      child: child,
+                    ),
+                  ),
+                  child: _buildAccountTile(
+                    account,
+                    onTap: () => Navigator.pop(ctx, account),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 4),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Use password instead',
+              style: TextStyle(color: _textMain, fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountTile(
+    SavedBiometricAccount account, {
+    required VoidCallback onTap,
+  }) {
+    final server = account.serverAddress.replaceFirst(RegExp(r'^https?://'), '');
+    final initial = account.username.isNotEmpty ? account.username[0].toUpperCase() : '?';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: _inputBg.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: _accentColor.withValues(alpha: 0.35),
+                  child: Text(
+                    initial,
+                    style: TextStyle(color: _textMain, fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        account.username,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: _textMain, fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${account.databaseLabel}  \u2022  $server',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: _textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.fingerprint_rounded, color: _textMain, size: 26),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Server input ─────────────────────────────────────────────────────────
+
   Widget _buildServerInput() {
     final isFocused = _serverFocus.hasFocus;
-    Widget? statusIcon;
 
+    Widget? statusIcon;
     switch (_serverState) {
       case _ConnState.checking:
         statusIcon = SizedBox(
@@ -702,6 +1064,7 @@ class LoginScreenState extends State<LoginScreen> with SingleTickerProviderState
     bool isPassword = false,
   }) {
     final isFocused = focusNode.hasFocus;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       decoration: BoxDecoration(
